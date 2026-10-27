@@ -213,7 +213,7 @@
     const r = Math.random();
     if (r < .5) { dir = Math.random() < .5 ? -1 : 1; setMode('walk', 2 + Math.random() * 4); }
     else if (r < .75) setMode('idle', 2 + Math.random() * 3);
-    else if (r < .9) { setMode('sleep', 6 + Math.random() * 8); say('💤'); }
+    else if (r < .9) setMode('sleep', 6 + Math.random() * 8);
     else jump();
   }
   drag(el, {
