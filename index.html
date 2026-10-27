@@ -23,6 +23,26 @@
   document.getElementById('bm').href =
     "javascript:(()=>{const s=document.createElement('script');s.src='" + u + "?'+Date.now();document.documentElement.appendChild(s)})()";
 </script>
+  <p><button id="pip" style="padding:10px 16px;border:0;border-radius:8px;background:#16a34a;color:#fff;font:600 16px system-ui;cursor:pointer">📌 Buka jendela mini (selalu di atas)</button> <span id="pipmsg"></span></p>
+<script>
+document.getElementById('pip').onclick = async () => {
+  const msg = document.getElementById('pipmsg');
+  if (!('documentPictureInPicture' in window)) { msg.textContent = 'Butuh Edge/Chrome 116+.'; return; }
+  try {
+    const pw = await documentPictureInPicture.requestWindow({ width: 340, height: 240 });
+    pw.document.body.style.cssText = 'margin:0;background:#e8f0fe;overflow:hidden';
+    window.__aroPet && window.__aroPet.destroy();
+    const s = pw.document.createElement('script');
+    s.src = new URL('pet.js', location.href).href;
+    pw.document.body.appendChild(s);
+    pw.addEventListener('pagehide', () => {
+      const r = document.createElement('script');
+      r.src = 'pet.js?' + Date.now();
+      document.body.appendChild(r);
+    });
+  } catch (e) { msg.textContent = 'Gagal: ' + e.message; }
+};
+</script>
 <script src="pet.js"></script>
 </body>
 </html>
