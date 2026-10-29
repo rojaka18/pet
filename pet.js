@@ -70,7 +70,7 @@
   el.style.cssText = `position:fixed;left:0;top:0;z-index:${TOP};user-select:none;-webkit-user-select:none;touch-action:none;cursor:grab;text-align:center`;
   acc.style.cssText = 'position:absolute;left:0;right:0;pointer-events:none;line-height:1';
   badge.style.cssText = 'position:absolute;right:-8px;top:-6px;pointer-events:none;line-height:1';
-  bub.style.cssText = `position:absolute;background:#fff;color:#222;font:13px/1.4 ${FONT};padding:6px 10px;border-radius:10px;box-shadow:0 2px 10px #0004;display:none;cursor:default;text-align:center;white-space:pre-line;width:max-content;max-width:min(260px,calc(100vw - 24px))`;
+  bub.style.cssText = `position:absolute;background:#fff;color:#222;font:13px/1.4 ${FONT};padding:6px 10px;border-radius:10px;box-shadow:0 2px 10px #0004;display:none;cursor:default;text-align:center;white-space:pre-line;width:max-content;max-width:min(260px,calc(100vw - 24px));max-height:calc(100vh - 16px);overflow:auto;box-sizing:border-box`;
   bub.addEventListener('pointerdown', e => e.stopPropagation());
   el.append(face, acc, badge, bub);
   root.appendChild(el);
@@ -110,18 +110,20 @@
   };
   const cur = Object.assign({}, BASE), gz = { x: 0, y: 0 }, wand = { x: 0, y: 0 };
   let eyeCol = '#22d3ee', emoName = 'normal', emoUntil = 0, gazeForce = null, mx = 0, my = 0, lastMove = 0;
-  let nextBlink = 0, blinkT = 0, nextWander = 0, nextQuirk = Date.now() + 10000, gameTok = 0;
+  let nextBlink = 0, blinkT = 0, nextWander = 0, nextQuirk = Date.now() + 10000, gameTok = 0, landSq = 0, poke = 0;
 
   const hide = () => { bub.style.display = 'none'; clearTimeout(bt); };
   const setMode = (m, t) => { if (mode === 'sleep' && m !== 'sleep' && !hold) hide(); mode = m; timer = t; };
 
   function place() {
-    const up = y > H / 2;
+    bub.style.display = 'block';
+    const bw = bub.offsetWidth, bh = bub.offsetHeight, g = 4;
+    const fitUp = y - bh - g >= 0, fitDown = y + S + bh + g <= H;
+    const up = fitUp && fitDown ? y > H / 2 : fitUp || fitDown ? fitUp : y > H - y - S;
     bub.style.top = up ? 'auto' : '100%'; bub.style.bottom = up ? '100%' : 'auto';
-    bub.style.margin = up ? '0 0 4px' : '4px 0 0';
-    if (x < 140) { bub.style.left = '0'; bub.style.right = 'auto'; bub.style.transform = 'none'; }
-    else if (x > W - 160) { bub.style.right = '0'; bub.style.left = 'auto'; bub.style.transform = 'none'; }
-    else { bub.style.left = '50%'; bub.style.right = 'auto'; bub.style.transform = 'translateX(-50%)'; }
+    bub.style.margin = up ? `0 0 ${g}px` : `${g}px 0 0`;
+    bub.style.right = 'auto'; bub.style.transform = 'none';
+    bub.style.left = clamp(x + (S - bw) / 2, 4, Math.max(4, W - bw - 4)) - x + 'px';
   }
   function card(text, btns, ms) {
     bub.textContent = '';
@@ -137,13 +139,13 @@
       });
       bub.appendChild(r);
     }
-    place(); bub.style.display = 'block'; clearTimeout(bt); if (ms) bt = setTimeout(hide, ms);
+    place(); clearTimeout(bt); if (ms) bt = setTimeout(hide, ms);
   }
   const say = (t, ms) => { if (hold) return false; card(t, null, ms); return true; };
   function release() { hold = false; hide(); vx = vy = 0; bounce = 0; setMode('air', 0); }
   function notify(text, btns, ms) {
     hold = true; const my = ++tok; setMode('idle', 0); setEmo('surprised', 1.5);
-    x = W / 2 - S / 2; y = Math.max(8, H * .3 - S / 2); vx = vy = 0;
+    vx = vy = 0;
     card(text, btns.map(([l, f]) => [l, () => { f(); release(); }]));
     if (ms) setTimeout(() => { if (hold && tok === my) release(); }, ms);
     beep();
@@ -227,7 +229,6 @@
   /* ---------- hewan ---------- */
   function jump() { vy = -650; vx = dir * 120; bounce = 0; setMode('air', 0); }
   function next() {
-    if (C.desk) { if (Math.random() < .8) setMode('idle', 3 + Math.random() * 4); else setMode('sleep', 8 + Math.random() * 8); return; }
     const r = Math.random();
     if (r < .5) { dir = Math.random() < .5 ? -1 : 1; setMode('walk', 2 + Math.random() * 4); }
     else if (r < .75) setMode('idle', 2 + Math.random() * 3);
@@ -249,15 +250,15 @@
   });
   function click(e) {
     const n = Date.now();
-    combo = n - lastClick < 800 ? combo + 1 : 1; lastClick = n;
+    combo = n - lastClick < 800 ? combo + 1 : 1; lastClick = n; poke = 1;
     st.happy = clamp(st.happy + 1, 0, 100);
     if (combo > st.best) st.best = combo;
     fx(pick(['💥', '✨', '⭐']), e.clientX, e.clientY);
     const angry = n < angryUntil;
     if (combo === 5) { angryUntil = n + 3000; say('💢 Ih, ngambek ah!', 2500); setMode('idle', 3); st.happy = clamp(st.happy - 3, 0, 100); }
     else if (angry) { angryUntil = n + 1500; say(`💥 x${combo}${combo >= 10 ? ' 🔥' : ''}`, 700); }
-    else if (combo >= 3) { say('💥 x' + combo, 700); if (!C.desk) jump(); else setEmo('surprised', .6); }
-    else { say('!', 600); if (!C.desk) jump(); else setEmo('surprised', .6); }
+    else if (combo >= 3) { say('💥 x' + combo, 700); jump(); setEmo('surprised', .6); }
+    else { say('!', 600); jump(); setEmo('surprised', .6); }
   }
   el.addEventListener('mouseenter', () => { ht = setTimeout(() => { if (mode !== 'drag' && !hold) { say(status(), 4500); setEmo('happy', 2); st.happy = clamp(st.happy + 1, 0, 100); } }, 700); });
   el.addEventListener('mouseleave', () => clearTimeout(ht));
@@ -397,10 +398,11 @@
   /* ---------- loop ---------- */
   function tick(t) {
     const dt = Math.min(.05, (t - last) / 1000 || 0); last = t;
+    landSq = Math.max(0, landSq - dt * 5); poke = Math.max(0, poke - dt * 3);
     const brk = pomo && pomo.phase === 'break';
     if (!hold && mode !== 'drag' && mode !== 'air') {
       if (brk) { if (mode !== 'sleep') setMode('sleep', 9); timer = 9; }
-      else if (item && !item.drag && mode !== 'chase' && !C.desk) { if (mode === 'sleep') hide(); mode = 'chase'; }
+      else if (item && !item.drag && mode !== 'chase') { if (mode === 'sleep') hide(); mode = 'chase'; }
     }
     updItem(dt);
     if (mode === 'air') {
@@ -409,7 +411,7 @@
       if (x > W - S) { x = W - S; vx = -Math.abs(vx) * .6; }
       if (y < 0) { y = 0; vy = Math.abs(vy) * .5; }
       if (y >= H - S) {
-        y = H - S;
+        y = H - S; landSq = clamp(Math.abs(vy) / 900, .3, 1);
         if (bounce && Math.abs(vy) > 150) { vy = -vy * bounce; vx *= .8; }
         else { vy = 0; vx = 0; setMode('idle', 1 + Math.random() * 2); }
       }
@@ -426,7 +428,7 @@
     } else if (mode !== 'drag') {
       timer -= dt;
       if (mode === 'walk' && !hold) {
-        x += dir * 55 * dt;
+        x += dir * 70 * dt;
         if (x < 0) { x = 0; dir = 1; } if (x > W - S) { x = W - S; dir = -1; }
       }
       if (timer <= 0 && !hold) next();
@@ -439,9 +441,20 @@
     if (!C.desk && face.textContent !== f) face.textContent = f;
     const bg = mode === 'sleep' ? '💤' : angry ? '💢' : st.hunger > 70 ? '🍖' : '';
     if (badge.textContent !== bg) badge.textContent = bg;
-    const bob = mode === 'walk' || mode === 'chase' ? Math.sin(t / 110) * 3 : 0, sh = angry ? Math.sin(t / 30) * 3 : 0;
-    face.style.transform = C.desk ? `translate(${sh}px,0)` : `translate(${sh}px,${bob}px) scaleX(${dir > 0 ? -1 : 1})`;
+    const sh = angry ? Math.sin(t / 30) * 3 : 0;
+    let sy = 1, lift = 0, rot = 0;
+    if (mode === 'walk' || mode === 'chase') { const th = t / (mode === 'chase' ? 90 : 130), a = Math.abs(Math.sin(th)); sy = .88 + .24 * a; lift = a * S * .09; rot = Math.sin(th) * 5 * dir; }
+    else if (mode === 'air') sy = 1 + clamp(Math.abs(vy) / 2500, 0, .22);
+    else if (mode === 'drag') sy = 1.07;
+    else if (mode === 'sleep') sy = .96 + Math.sin(t / 700) * .025;
+    else sy = 1 + Math.sin(t / 600) * .015;
+    sy = clamp(sy - landSq * .25 + Math.sin(t / 45) * poke * .15, .6, 1.4);
+    const sx = 1 / sy;
+    face.style.transformOrigin = '50% 100%';
+    face.style.transform = `translate(${sh}px,${-lift}px) rotate(${rot}deg) scale(${C.desk ? sx : sx * (dir > 0 ? -1 : 1)},${sy})`;
+    acc.style.transform = `translateY(${-lift - (sy - 1) * S * .9}px) rotate(${rot}deg)`;
     el.style.transform = `translate(${x}px,${y}px)`;
+    if (bub.style.display === 'block') place();
     if (item) item.el.style.transform = `translate(${item.x}px,${item.y}px)`;
     raf = requestAnimationFrame(tick);
   }
