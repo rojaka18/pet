@@ -18,7 +18,7 @@
   const DEF = {
     name: 'Mimi', owner: 'Aro', animal: '🐱', hat: '', buddy: '', size: 52, sound: false,
     sitMin: 45, waterMin: 90, eyeMin: 20, idleMin: 5, snoozeMin: 10,
-    city: 'Jakarta', before: 10, endTime: '17:00', sysIdle: false,
+    city: 'Jakarta', before: 10, endTime: '17:00', sysIdle: false, desk: false, eye: '#22d3ee',
   };
   const C = Object.assign({}, DEF);
   try { Object.assign(C, JSON.parse(localStorage.getItem('aroPet.cfg') || '{}')); } catch (e) {}
@@ -29,6 +29,7 @@
   const saveS = () => { st.t = Date.now(); try { localStorage.setItem('aroPet.st', JSON.stringify(st)); } catch (e) {} };
   { const s = Math.min(8 * 3600, Math.max(0, (Date.now() - st.t) / 1000));
     st.hunger = clamp(st.hunger + s * .0093, 0, 100); st.happy = clamp(st.happy - s * .01, 0, 100); }
+  st.g = Object.assign({ rps: [0, 0, 0], ttt: [0, 0, 0], reflex: 0, gaze: 0 }, st.g || {});
 
   /* ---------- waktu sholat ---------- */
   const rad = Math.PI / 180, sin = a => Math.sin(a * rad), cos = a => Math.cos(a * rad),
@@ -62,7 +63,8 @@
   }
 
   /* ---------- elemen ---------- */
-  let S = clamp(+C.size || 52, 36, 96), animal = C.animal;
+  const baseS = () => clamp(+C.size || 52, 36, 96) * (C.desk ? 1.6 : 1);
+  let S = baseS(), animal = C.animal;
   const el = doc.createElement('div');
   const face = doc.createElement('div'), acc = doc.createElement('div'), badge = doc.createElement('div'), bub = doc.createElement('div');
   el.style.cssText = `position:fixed;left:0;top:0;z-index:${TOP};user-select:none;-webkit-user-select:none;touch-action:none;cursor:grab;text-align:center`;
@@ -75,9 +77,11 @@
   function applySize() {
     el.style.width = el.style.height = S + 'px';
     el.style.font = `${Math.round(S * .85)}px/${S}px ${FONT}`;
-    acc.style.top = -Math.round(S * .3) + 'px'; acc.style.fontSize = Math.round(S * .45) + 'px';
+    acc.style.top = -Math.round(S * (C.desk ? .1 : .3)) + 'px'; acc.style.fontSize = Math.round(S * (C.desk ? .3 : .45)) + 'px';
     badge.style.fontSize = Math.round(S * .3) + 'px';
-    face.textContent = animal; acc.textContent = C.hat;
+    if (C.desk) { face.textContent = ''; face.appendChild(cv); cv.width = cv.height = Math.round(S * 2); cv.style.width = cv.style.height = S + 'px'; }
+    else face.textContent = animal;
+    acc.textContent = C.hat;
   }
 
   const panel = doc.createElement('div');
@@ -94,6 +98,19 @@
   const A = { sit: 0, eye: 0, water: 0 };
   const fired = {};
   let item = null, bud = null, wx = null, pomo = null, sysIdle = null, idleAbort = null;
+  /* desk buddy */
+  const cv = doc.createElement('canvas'); cv.style.cssText = 'display:block;pointer-events:none';
+  const BASE = { w: .17, h: .26, r: .085, lid: 0, tilt: 0, arc: 0, arcR: 0, heart: 0, spiral: 0 };
+  const ex = o => Object.assign({}, BASE, o);
+  const EXPR = {
+    normal: ex({}), happy: ex({ arc: 1 }), wink: ex({ arcR: 1 }), sleepy: ex({ h: .07, r: .035 }),
+    angry: ex({ h: .22, r: .05, lid: .55, tilt: 1, col: '#f87171' }), sad: ex({ h: .22, lid: .5, tilt: -1, col: '#60a5fa' }),
+    surprised: ex({ w: .21, h: .31, r: .105, col: '#fde047' }), go: ex({ w: .21, h: .31, r: .105, col: '#4ade80' }),
+    love: ex({ heart: 1, col: '#f472b6' }), dizzy: ex({ spiral: 1, col: '#c4b5fd' }),
+  };
+  const cur = Object.assign({}, BASE), gz = { x: 0, y: 0 }, wand = { x: 0, y: 0 };
+  let eyeCol = '#22d3ee', emoName = 'normal', emoUntil = 0, gazeForce = null, mx = 0, my = 0, lastMove = 0;
+  let nextBlink = 0, blinkT = 0, nextWander = 0, nextQuirk = Date.now() + 10000, gameTok = 0;
 
   const hide = () => { bub.style.display = 'none'; clearTimeout(bt); };
   const setMode = (m, t) => { if (mode === 'sleep' && m !== 'sleep' && !hold) hide(); mode = m; timer = t; };
@@ -125,7 +142,7 @@
   const say = (t, ms) => { if (hold) return false; card(t, null, ms); return true; };
   function release() { hold = false; hide(); vx = vy = 0; bounce = 0; setMode('air', 0); }
   function notify(text, btns, ms) {
-    hold = true; const my = ++tok; setMode('idle', 0);
+    hold = true; const my = ++tok; setMode('idle', 0); setEmo('surprised', 1.5);
     x = W / 2 - S / 2; y = Math.max(8, H * .3 - S / 2); vx = vy = 0;
     card(text, btns.map(([l, f]) => [l, () => { f(); release(); }]));
     if (ms) setTimeout(() => { if (hold && tok === my) release(); }, ms);
@@ -210,6 +227,7 @@
   /* ---------- hewan ---------- */
   function jump() { vy = -650; vx = dir * 120; bounce = 0; setMode('air', 0); }
   function next() {
+    if (C.desk) { if (Math.random() < .8) setMode('idle', 3 + Math.random() * 4); else setMode('sleep', 8 + Math.random() * 8); return; }
     const r = Math.random();
     if (r < .5) { dir = Math.random() < .5 ? -1 : 1; setMode('walk', 2 + Math.random() * 4); }
     else if (r < .75) setMode('idle', 2 + Math.random() * 3);
@@ -224,8 +242,8 @@
     end: (a, b, moved, e) => {
       el.style.cursor = 'grab';
       if (moved) {
-        vx = a; vy = b; bounce = .55; mode = 'air';
-        if (Math.hypot(vx, vy) > 800) say('Wuaaa! 😵', 1200);
+        vx = a; vy = b; bounce = .55; mode = 'air'; emoUntil = 0;
+        if (Math.hypot(vx, vy) > 800) { say('Wuaaa! 😵', 1200); setEmo('dizzy', 1.8); }
       } else if (!hold) click(e);
     },
   });
@@ -238,10 +256,10 @@
     const angry = n < angryUntil;
     if (combo === 5) { angryUntil = n + 3000; say('💢 Ih, ngambek ah!', 2500); setMode('idle', 3); st.happy = clamp(st.happy - 3, 0, 100); }
     else if (angry) { angryUntil = n + 1500; say(`💥 x${combo}${combo >= 10 ? ' 🔥' : ''}`, 700); }
-    else if (combo >= 3) { say('💥 x' + combo, 700); jump(); }
-    else { say('!', 600); jump(); }
+    else if (combo >= 3) { say('💥 x' + combo, 700); if (!C.desk) jump(); else setEmo('surprised', .6); }
+    else { say('!', 600); if (!C.desk) jump(); else setEmo('surprised', .6); }
   }
-  el.addEventListener('mouseenter', () => { ht = setTimeout(() => { if (mode !== 'drag' && !hold) { say(status(), 4500); st.happy = clamp(st.happy + 1, 0, 100); } }, 700); });
+  el.addEventListener('mouseenter', () => { ht = setTimeout(() => { if (mode !== 'drag' && !hold) { say(status(), 4500); setEmo('happy', 2); st.happy = clamp(st.happy + 1, 0, 100); } }, 700); });
   el.addEventListener('mouseleave', () => clearTimeout(ht));
   el.addEventListener('contextmenu', e => { e.preventDefault(); e.stopPropagation(); openMenu(); });
 
@@ -282,11 +300,11 @@
     if (Math.abs(ic - pc) > S * .7 || Math.abs(item.y + item.s / 2 - (y + S / 2)) > S * .9) return;
     if (item.k === 'ball') {
       item.vx = (ic >= pc ? 1 : -1) * rnd(350, 650); item.vy = -rnd(300, 600); item.cool = .4;
-      st.kicks++; st.happy = clamp(st.happy + 3, 0, 100); fx('⚽', ic, item.y);
+      st.kicks++; st.happy = clamp(st.happy + 3, 0, 100); fx('⚽', ic, item.y); setEmo('happy', 1);
       if (st.kicks % 10 === 0) say('⚽ Gol! ' + st.kicks, 1500);
     } else {
       st.fed++; st.hunger = clamp(st.hunger - 45, 0, 100); st.happy = clamp(st.happy + 12, 0, 100);
-      fx('❤️', ic, item.y); removeItem(); say('Nyam nyam 😋', 1500); setMode('idle', 2);
+      fx('❤️', ic, item.y); removeItem(); say('Nyam nyam 😋', 1500); setMode('idle', 2); setEmo('love', 2.5);
     }
   }
 
@@ -311,13 +329,78 @@
     bud.el.style.transform = `translate(${bud.x}px,${bud.y}px) scaleX(${bud.dir > 0 ? -1 : 1})`;
   }
 
+  /* ---------- desk buddy: ekspresi & gambar ---------- */
+  const setEmo = (name, secs) => { emoName = name; emoUntil = Date.now() + secs * 1000; };
+  function emoNow(n) {
+    if (emoUntil > n) return emoName;
+    if (mode === 'sleep') return 'sleepy';
+    if (n < angryUntil) return 'angry';
+    if (mode === 'drag') return 'surprised';
+    if (st.hunger > 70) return 'sad';
+    return 'normal';
+  }
+  const onMove = e => { mx = e.clientX; my = e.clientY; lastMove = Date.now(); };
+  function rrect(g, x0, y0, w, h, r) {
+    r = Math.min(r, w / 2, h / 2); g.beginPath(); g.moveTo(x0 + r, y0);
+    g.arcTo(x0 + w, y0, x0 + w, y0 + h, r); g.arcTo(x0 + w, y0 + h, x0, y0 + h, r);
+    g.arcTo(x0, y0 + h, x0, y0, r); g.arcTo(x0, y0, x0 + w, y0, r); g.closePath();
+  }
+  function drawBuddy(dt, t, n) {
+    const E = EXPR[emoNow(n)] || EXPR.normal, k = Math.min(1, dt * 14);
+    eyeCol = E.col || C.eye;
+    for (const key in BASE) cur[key] += (E[key] - cur[key]) * k;
+    if (n > nextBlink) { blinkT = n; nextBlink = n + rnd(2500, 6000); }
+    const bl = n - blinkT < 160 ? Math.sin((n - blinkT) / 160 * Math.PI) : 0;
+    if (n > nextQuirk) { nextQuirk = n + rnd(8, 16) * 1e3; if (!hold && mode !== 'sleep' && emoUntil < n && st.happy > 60) setEmo(pick(['happy', 'wink', 'happy']), 1.4); }
+    let tx = 0, ty = 0;
+    if (gazeForce && n < gazeForce.until) { tx = gazeForce.x; ty = gazeForce.y; }
+    else if (n - lastMove < 4000) { tx = clamp((mx - (x + S / 2)) / (S * 2.5), -1, 1); ty = clamp((my - (y + S / 2)) / (S * 2.5), -1, 1); }
+    else {
+      if (n > nextWander) { nextWander = n + rnd(1500, 4000); if (Math.random() < .35) { wand.x = wand.y = 0; } else { wand.x = rnd(-.8, .8); wand.y = rnd(-.6, .6); } }
+      tx = wand.x; ty = wand.y;
+    }
+    const kg = Math.min(1, dt * 10); gz.x += (tx - gz.x) * kg; gz.y += (ty - gz.y) * kg;
+    const g = cv.getContext('2d'), by = S * .18 + Math.sin(t / 900) * S * .004, bh = S - by - S * .01;
+    g.setTransform(2, 0, 0, 2, 0, 0); g.clearRect(0, 0, S, S);
+    g.shadowBlur = 0; g.fillStyle = '#0f172a'; g.strokeStyle = '#334155'; g.lineWidth = 2;
+    rrect(g, 1, by, S - 2, bh, S * .24); g.fill(); g.stroke();
+    const cy = by + bh * .48;
+    for (let i = 0; i < 2; i++) {
+      const cx = S * .5 + (i ? 1 : -1) * S * .2 + gz.x * S * .06, ey = cy + gz.y * S * .045;
+      const w = cur.w * S, h = Math.max(S * .012, cur.h * S * (1 - bl * .92)), r = Math.min(cur.r * S, w / 2, h / 2);
+      const arc = i ? Math.max(cur.arc, cur.arcR) : cur.arc;
+      g.fillStyle = g.strokeStyle = eyeCol; g.shadowColor = eyeCol; g.shadowBlur = S * .08;
+      if (cur.heart > .5) {
+        const s = S * .17; g.beginPath(); g.moveTo(cx, ey + s * .35);
+        g.bezierCurveTo(cx + s * .7, ey - s * .05, cx + s * .45, ey - s * .55, cx, ey - s * .2);
+        g.bezierCurveTo(cx - s * .45, ey - s * .55, cx - s * .7, ey - s * .05, cx, ey + s * .35); g.fill();
+      } else if (cur.spiral > .5) {
+        g.lineWidth = S * .03; g.beginPath();
+        for (let a = 0; a < 12; a += .3) g.lineTo(cx + Math.cos(a + t / 150) * a * S * .0085, ey + Math.sin(a + t / 150) * a * S * .0085);
+        g.stroke();
+      } else if (arc > .5) {
+        g.lineWidth = S * .045; g.lineCap = 'round'; g.beginPath(); g.arc(cx, ey + S * .04, S * .075, Math.PI * 1.1, Math.PI * 1.9); g.stroke();
+      } else {
+        rrect(g, cx - w / 2, ey - h / 2, w, h, r); g.fill();
+        if (cur.lid > .02) {
+          g.shadowBlur = 0; g.fillStyle = '#0f172a';
+          const lowIn = Math.max(0, cur.tilt) * cur.lid * h, lowOut = Math.max(0, -cur.tilt) * cur.lid * h;
+          const yl = i === 0 ? lowOut : lowIn, yr = i === 0 ? lowIn : lowOut;
+          g.beginPath(); g.moveTo(cx - w / 2 - 2, ey - h / 2 - 2); g.lineTo(cx + w / 2 + 2, ey - h / 2 - 2);
+          g.lineTo(cx + w / 2 + 2, ey - h / 2 + yr); g.lineTo(cx - w / 2 - 2, ey - h / 2 + yl); g.closePath(); g.fill();
+        }
+      }
+    }
+    g.shadowBlur = 0;
+  }
+
   /* ---------- loop ---------- */
   function tick(t) {
     const dt = Math.min(.05, (t - last) / 1000 || 0); last = t;
     const brk = pomo && pomo.phase === 'break';
     if (!hold && mode !== 'drag' && mode !== 'air') {
-      if (brk) { if (mode !== 'sleep') { setMode('sleep', 9); say('💤', 1500); } timer = 9; }
-      else if (item && !item.drag && mode !== 'chase') { if (mode === 'sleep') hide(); mode = 'chase'; }
+      if (brk) { if (mode !== 'sleep') setMode('sleep', 9); timer = 9; }
+      else if (item && !item.drag && mode !== 'chase' && !C.desk) { if (mode === 'sleep') hide(); mode = 'chase'; }
     }
     updItem(dt);
     if (mode === 'air') {
@@ -348,22 +431,23 @@
       }
       if (timer <= 0 && !hold) next();
     }
+    if (C.desk) { if (!hold) touchItem(); drawBuddy(dt, t, Date.now()); }
     updBuddy(dt);
     if (wx) drawWx(dt, t);
     const angry = Date.now() < angryUntil;
     const f = angry ? (animal === '🐱' ? '😾' : '😤') : animal;
-    if (face.textContent !== f) face.textContent = f;
+    if (!C.desk && face.textContent !== f) face.textContent = f;
     const bg = mode === 'sleep' ? '💤' : angry ? '💢' : st.hunger > 70 ? '🍖' : '';
     if (badge.textContent !== bg) badge.textContent = bg;
     const bob = mode === 'walk' || mode === 'chase' ? Math.sin(t / 110) * 3 : 0, sh = angry ? Math.sin(t / 30) * 3 : 0;
-    face.style.transform = `translate(${sh}px,${bob}px) scaleX(${dir > 0 ? -1 : 1})`;
+    face.style.transform = C.desk ? `translate(${sh}px,0)` : `translate(${sh}px,${bob}px) scaleX(${dir > 0 ? -1 : 1})`;
     el.style.transform = `translate(${x}px,${y}px)`;
     if (item) item.el.style.transform = `translate(${item.x}px,${item.y}px)`;
     raf = requestAnimationFrame(tick);
   }
 
   /* ---------- panel ---------- */
-  const closePanel = () => { panel.style.display = 'none'; panel.textContent = ''; };
+  const closePanel = () => { gameTok++; panel.style.display = 'none'; panel.textContent = ''; };
   function openPanel(title, build) {
     panel.textContent = '';
     const h = doc.createElement('div'); h.textContent = title; h.style.cssText = 'font-weight:700;margin-bottom:8px;font-size:14px';
@@ -381,6 +465,7 @@
   }
   const act = f => () => { closePanel(); f(); };
   function openMenu() {
+    gameTok++;
     openPanel(`${C.name} ${moodTxt()}`, p => {
       grid(p, [
         ['🍖 Makan', act(() => spawnItem('food', '🍖'))], ['⚽ Bola', act(() => spawnItem('ball', '⚽'))],
@@ -389,6 +474,8 @@
         ['🎊 Konfeti', act(() => weather('confetti', 6))], ['✨ Cuaca off', act(() => weather(null))],
         [pomo ? '🍅 Stop Pomodoro' : '🍅 Pomodoro', act(togglePomo)], ['🕌 Jadwal', showSchedule],
         ['⚙️ Pengaturan', openSettings], ['🔔 Tes', act(() => notify('Tes reminder ✅', [['Oke', () => {}]]))],
+        [C.desk ? '🐱 Mode Emoji' : '👀 Mode Desk Buddy', act(() => { C.desk = !C.desk; saveC(); applyCfg(); say(C.desk ? 'Mode Desk Buddy 👀' : 'Mode Emoji 🐱', 2000); })],
+        ...(C.desk ? [['🎮 Main', gameMenu]] : []),
         ['❌ Hilangkan', () => destroy(), '#dc2626'], ['Tutup', closePanel],
       ]);
     });
@@ -401,6 +488,98 @@
       t.textContent = Object.keys(T).map(k => k + (k === 'Dzuhur' ? jum : '') + '  ' + hhmm(T[k])).join('\n') + '\n\nPerkiraan hitungan Kemenag, cocokkan dengan jadwal resmi.';
       p.appendChild(t); grid(p, [['Tutup', closePanel]]);
     });
+  }
+  /* ---------- game ---------- */
+  function gtext(p, s) { const t = doc.createElement('div'); t.style.cssText = 'margin-bottom:8px;white-space:pre-line'; t.textContent = s; p.appendChild(t); }
+  const gfoot = p => grid(p, [['← Game', gameMenu], ['Tutup', closePanel]]);
+  function gameMenu() {
+    gameTok++;
+    openPanel('🎮 Main sama ' + C.name, p => grid(p, [
+      ['✊ Suit', gRps], ['👀 Tebak mata', gGaze], ['⚡ Refleks', gReflex], ['⭕ Tic-tac-toe', gTtt], ['Tutup', closePanel],
+    ]));
+  }
+  function gRps() {
+    const E = ['✊', '✋', '✌️']; let msg = 'Pilih: batu, kertas, atau gunting';
+    const draw = () => openPanel('✊ Suit', p => {
+      gtext(p, msg + `\nMenang ${st.g.rps[0]} · Kalah ${st.g.rps[1]} · Seri ${st.g.rps[2]}`);
+      grid(p, E.map((e, i) => [e, () => play(i)])); gfoot(p);
+    });
+    const play = u => {
+      const b = Math.floor(Math.random() * 3), r = (u - b + 3) % 3, vs = `${E[u]} vs ${E[b]} → `;
+      if (r === 0) { st.g.rps[2]++; setEmo('wink', 1.5); msg = vs + 'Seri!'; }
+      else if (r === 1) { st.g.rps[0]++; setEmo('sad', 2); msg = vs + 'Kamu menang! 🎉'; }
+      else { st.g.rps[1]++; setEmo('happy', 2); msg = vs + 'Aku menang 😎'; }
+      saveS(); draw();
+    };
+    draw();
+  }
+  function gGaze() {
+    const my = ++gameTok, D = [['⬅️', -1, 0], ['⬆️', 0, -1], ['⬇️', 0, 1], ['➡️', 1, 0]];
+    let round = 0, score = 0, ans = null, locked = true, msg = '';
+    const draw = () => openPanel('👀 Tebak arah mata', p => {
+      gtext(p, msg);
+      if (round < 5) grid(p, D.map(d => [d[0], () => guess(d)])); else grid(p, [['Main lagi', gGaze]]);
+      gfoot(p);
+    });
+    const start = () => {
+      ans = pick(D); locked = true; msg = `Ronde ${round + 1}/5. Lihat mataku... 👀`; draw();
+      setTimeout(() => { if (my === gameTok) gazeForce = { x: ans[1] * 1.4, y: ans[2] * 1.4, until: Date.now() + 700 }; }, 700);
+      setTimeout(() => { if (my !== gameTok) return; locked = false; msg = `Ronde ${round + 1}/5. Aku lirik ke mana tadi?`; draw(); }, 1700);
+    };
+    const guess = d => {
+      if (locked) return; locked = true;
+      if (d === ans) { score++; setEmo('happy', 1.2); msg = 'Benar! ✅'; } else { setEmo('sad', 1.2); msg = 'Salah ❌ (aku lirik ' + ans[0] + ')'; }
+      round++;
+      if (round >= 5) { st.g.gaze = Math.max(st.g.gaze, score); saveS(); msg += `\nSelesai! Skor ${score}/5 (terbaik ${st.g.gaze}/5)`; draw(); }
+      else { draw(); setTimeout(() => { if (my === gameTok) start(); }, 1000); }
+    };
+    start();
+  }
+  function gReflex() {
+    const my = ++gameTok; let s = 'idle', t0 = 0, tm, msg = 'Klik Mulai. Saat mataku melotot hijau, klik secepatnya!';
+    const draw = () => openPanel('⚡ Uji refleks', p => {
+      gtext(p, msg + (st.g.reflex ? `\nRekor: ${st.g.reflex} ms` : ''));
+      const b = btn(s === 'idle' ? 'Mulai' : s === 'wait' ? 'Tunggu...' : 'KLIK!', go, s === 'go' ? '#16a34a' : s === 'wait' ? '#dc2626' : '#2563eb');
+      b.style.cssText += ';width:100%;padding:16px;font-size:16px;flex:none'; p.appendChild(b); gfoot(p);
+    });
+    const go = () => {
+      if (s === 'idle') {
+        s = 'wait'; msg = 'Tunggu mataku berubah...'; draw();
+        tm = setTimeout(() => { if (my !== gameTok) return; s = 'go'; t0 = performance.now(); emoName = 'go'; emoUntil = Date.now() + 5000; msg = 'SEKARANG!'; draw(); }, rnd(1500, 4000));
+      } else if (s === 'wait') { clearTimeout(tm); s = 'idle'; msg = 'Terlalu cepat! 😅'; setEmo('sad', 1.5); draw(); }
+      else {
+        const ms = Math.round(performance.now() - t0); s = 'idle';
+        msg = `${ms} ms · ${ms < 200 ? 'Kilat ⚡' : ms < 300 ? 'Cepat 👍' : 'Lumayan 🙂'}`;
+        if (!st.g.reflex || ms < st.g.reflex) { st.g.reflex = ms; msg += ' · rekor baru! 🏆'; }
+        setEmo(ms < 300 ? 'wink' : 'happy', 2); saveS(); draw();
+      }
+    };
+    draw();
+  }
+  function gTtt() {
+    const b = Array(9).fill(''), L = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]];
+    let over = false, msg = 'Kamu ❌, aku ⭕. Giliranmu!';
+    const win = q => L.find(l => l.every(i => b[i] === q)), free = () => b.map((v, i) => v ? -1 : i).filter(i => i >= 0);
+    const find = q => { for (const l of L) { const v = l.map(i => b[i]); if (v.filter(z => z === q).length === 2 && v.includes('')) return l[v.indexOf('')]; } return -1; };
+    const bot = () => { let m = -1; if (Math.random() < .75) { m = find('⭕'); if (m < 0) m = find('❌'); if (m < 0 && !b[4]) m = 4; } return m < 0 ? pick(free()) : m; };
+    const draw = () => openPanel('⭕ Tic-tac-toe', p => {
+      gtext(p, msg + `\nKamu ${st.g.ttt[0]} · Aku ${st.g.ttt[1]} · Seri ${st.g.ttt[2]}`);
+      const gd = doc.createElement('div'); gd.style.cssText = 'display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px';
+      b.forEach((v, i) => { const c = btn(v || '·', () => move(i)); c.style.cssText += ';font-size:22px;padding:10px 0;flex:none'; gd.appendChild(c); });
+      p.appendChild(gd); grid(p, [['Ulang', gTtt]]); gfoot(p);
+    });
+    const end = (m, k, emo) => { over = true; msg = m; st.g.ttt[k]++; setEmo(emo, 2.5); };
+    const move = i => {
+      if (over || b[i]) return; b[i] = '❌';
+      if (win('❌')) end('Kamu menang! 🎉', 0, 'sad');
+      else if (!free().length) end('Seri 🤝', 2, 'wink');
+      else {
+        const m = bot(); b[m] = '⭕'; gazeForce = { x: (m % 3 - 1) * 1.4, y: (Math.floor(m / 3) - 1) * 1.4, until: Date.now() + 700 };
+        if (win('⭕')) end('Aku menang 😎', 1, 'happy'); else if (!free().length) end('Seri 🤝', 2, 'wink'); else msg = 'Giliranmu ❌';
+      }
+      saveS(); draw();
+    };
+    draw();
   }
   const inp = (type, val, extra) => {
     const i = doc.createElement('input'); i.type = type; Object.assign(i, extra || {});
@@ -424,6 +603,8 @@
       row('owner', 'Nama kamu', inp('text', C.owner));
       row('animal', 'Hewan', sel(ANIMALS.map(a => [a, a]), C.animal));
       row('hat', 'Aksesori', sel(Object.entries(HATS), C.hat));
+      row('desk', 'Mode Desk Buddy', inp('checkbox', C.desk));
+      row('eye', 'Warna mata', sel([['#22d3ee', 'Cyan'], ['#4ade80', 'Hijau'], ['#f472b6', 'Pink'], ['#facc15', 'Kuning'], ['#fb923c', 'Oranye']], C.eye));
       row('buddy', 'Teman', sel([['', 'Tanpa']].concat(ANIMALS.map(a => [a, a])), C.buddy));
       row('size', 'Ukuran', inp('range', C.size, { min: 36, max: 96 }));
       row('sound', 'Suara', inp('checkbox', C.sound));
@@ -441,6 +622,7 @@
         ['Simpan', () => {
           C.name = f.name.value.trim() || DEF.name; C.owner = f.owner.value.trim();
           C.animal = f.animal.value; C.hat = f.hat.value; C.buddy = f.buddy.value;
+          C.desk = f.desk.checked; C.eye = f.eye.value;
           C.size = clamp(+f.size.value || 52, 36, 96); C.sound = f.sound.checked;
           ['sitMin', 'waterMin', 'eyeMin', 'before'].forEach(k => { C[k] = Math.max(0, +f[k].value || 0); });
           C.city = f.city.value; C.endTime = f.endTime.value;
@@ -451,7 +633,7 @@
     });
   }
   function applyCfg() {
-    S = clamp(+C.size || 52, 36, 96); animal = C.animal; applySize();
+    S = baseS(); animal = C.animal; applySize();
     x = clamp(x, 0, W - S); y = clamp(y, 0, H - S); mkBuddy();
   }
 
@@ -497,6 +679,7 @@
   const evs = ['mousemove', 'keydown', 'scroll', 'pointerdown', 'wheel'];
   const onAct = () => { lastAct = Date.now(); };
   evs.forEach(a => addEventListener(a, onAct, true));
+  addEventListener('pointermove', onMove, true);
 
   /* ---------- reminder ---------- */
   const LINES = [
@@ -581,12 +764,12 @@
   addEventListener('resize', rs);
   function destroy() {
     cancelAnimationFrame(raf); clearInterval(iv); clearTimeout(bt); clearTimeout(ht);
-    evs.forEach(a => removeEventListener(a, onAct, true)); removeEventListener('resize', rs);
+    evs.forEach(a => removeEventListener(a, onAct, true)); removeEventListener('resize', rs); removeEventListener('pointermove', onMove, true);
     if (idleAbort) idleAbort.abort();
     saveS(); removeItem(); if (bud) bud.el.remove(); if (wx) wx.cv.remove();
     panel.remove(); el.remove(); delete window.__aroPet;
   }
-  window.__aroPet = { destroy };
+  window.__aroPet = { destroy, setEmo };
   applyCfg();
   if (C.sysIdle && 'IdleDetector' in window && navigator.permissions) {
     navigator.permissions.query({ name: 'idle-detection' }).then(p => { if (p.state === 'granted') startIdle().catch(() => {}); }).catch(() => {});
