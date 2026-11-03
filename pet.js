@@ -1,6 +1,22 @@
-/* Pet layar v3. Klik bookmarklet lagi = hilang. */
+/* Pet layar v4. Bookmarklet atau ekstensi. Klik bookmarklet lagi = hilang. Ctrl+Alt+P = sembunyi/tampil. */
 (() => {
   if (window.__aroPet) { window.__aroPet.destroy(); return; }
+  let dead = false;
+  window.__aroPet = { destroy() { dead = true; delete window.__aroPet; } };
+
+  /* ---------- penyimpanan: chrome.storage (ekstensi) atau localStorage (bookmarklet) ---------- */
+  const EXT = typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local;
+  const rd = (k, cb) => {
+    if (EXT) { try { chrome.storage.local.get(k, r => cb(r && r[k])); } catch (e) { cb(null); } }
+    else { let v = null; try { v = localStorage.getItem(k); } catch (e) {} cb(v); }
+  };
+  const wr = (k, v) => {
+    if (EXT) { try { chrome.storage.local.set({ [k]: v }); } catch (e) {} }
+    else { try { localStorage.setItem(k, v); } catch (e) {} }
+  };
+  rd('aroPet.cfg', rc => rd('aroPet.st', rs0 => { if (!dead) start(rc, rs0); }));
+
+  function start(rawC, rawS) {
   const doc = document, root = doc.documentElement;
   const rnd = (a, b) => a + Math.random() * (b - a), pick = a => a[Math.floor(Math.random() * a.length)];
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -21,22 +37,25 @@
   const HAT_LV = { '🎀': 1, '🧢': 2, '🎓': 3, '🎩': 4, '👑': 5 };
   const DEF = {
     name: 'Mimi', owner: 'Aro', animal: '🐱', hat: '', buddy: '', size: 52, sound: false,
-    sitMin: 45, waterMin: 90, eyeMin: 20, idleMin: 5, snoozeMin: 10,
+    sitMin: 45, waterMin: 90, eyeMin: 20, idleMin: 5, snoozeMin: 10, waterGoal: 8, notif: false,
     city: 'Jakarta', before: 10, endTime: '17:00', sysIdle: false, desk: false, eye: '#22d3ee',
     quietFrom: '', quietTo: '', eco: true,
   };
   const C = Object.assign({}, DEF);
-  try { Object.assign(C, JSON.parse(localStorage.getItem('aroPet.cfg') || '{}')); } catch (e) {}
-  const saveC = () => { try { localStorage.setItem('aroPet.cfg', JSON.stringify(C)); } catch (e) {} };
+  try { Object.assign(C, JSON.parse(rawC || '{}')); } catch (e) {}
+  const saveC = () => wr('aroPet.cfg', JSON.stringify(C));
 
-  const st = { date: '', water: 0, kicks: 0, fed: 0, best: 0, greet: {}, hunger: 30, happy: 70, t: Date.now(), xp: 0, ach: {}, seen: {}, dndUntil: 0 };
-  try { Object.assign(st, JSON.parse(localStorage.getItem('aroPet.st') || '{}')); } catch (e) {}
-  const saveS = () => { st.t = Date.now(); try { localStorage.setItem('aroPet.st', JSON.stringify(st)); } catch (e) {} };
+  const st = { date: '', water: 0, kicks: 0, fed: 0, best: 0, greet: {}, hunger: 30, happy: 70, t: Date.now(), xp: 0, ach: {}, seen: {}, dndUntil: 0, streak: 0, goalDay: '', hist: {}, quest: null, px: null };
+  try { Object.assign(st, JSON.parse(rawS || '{}')); } catch (e) {}
+  const saveS = () => { st.t = Date.now(); if (typeof W === 'number' && W > 0) st.px = x / W; wr('aroPet.st', JSON.stringify(st)); };
   { const s = Math.min(8 * 3600, Math.max(0, (Date.now() - st.t) / 1000));
     st.hunger = clamp(st.hunger + s * .0093, 0, 100); st.happy = clamp(st.happy - s * .01, 0, 100); }
   st.g = Object.assign({ rps: [0, 0, 0], ttt: [0, 0, 0], reflex: 0, gaze: 0, mem: 0, whack: 0, catch: 0 }, st.g || {});
   st.tot = Object.assign({ click: 0, kick: 0, fed: 0, purr: 0, guide: 0, win: 0, water: 0, trick: 0, bestCombo: 0 }, st.tot || {});
   const lvl = () => Math.floor(Math.sqrt(st.xp / 20)) + 1, lvXp = L => 20 * (L - 1) * (L - 1);
+  const evoOf = L => L >= 15 ? 3 : L >= 8 ? 2 : L >= 4 ? 1 : 0, evo = () => evoOf(lvl());
+  const EVO_SCALE = [1, 1.06, 1.12, 1.18];
+  const EVO_FX = ['', 'drop-shadow(0 0 4px rgba(250,204,21,.55))', 'drop-shadow(0 0 7px rgba(250,204,21,.8))', 'drop-shadow(0 0 10px rgba(250,204,21,.95)) drop-shadow(0 0 4px #fff)'];
 
   /* ---------- waktu sholat ---------- */
   const rad = Math.PI / 180, sin = a => Math.sin(a * rad), cos = a => Math.cos(a * rad),
@@ -69,22 +88,29 @@
     for (let i = 0; i < 2; i++) { const T = dayTimes(y, m, d + i); for (const k in T) if (T[k].getTime() > n) return [k, T[k]]; }
   }
   const hm = s => /^\d\d:\d\d$/.test(s || '') ? +s.slice(0, 2) * 60 + +s.slice(3) : -1;
+  const dayKey = off => { const [y, m, d] = ymd(), t = new Date(Date.UTC(y, m - 1, d + off)); return [t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate()].join('-'); };
+  const hist = () => { const k = dayKey(0); return st.hist[k] || (st.hist[k] = { w: 0, g: 0, a: 0 }); };
+  const streak = () => st.goalDay === dayKey(0) || st.goalDay === dayKey(-1) ? st.streak : 0;
 
   /* ---------- elemen ---------- */
-  const baseS = () => clamp(+C.size || 52, 36, 96) * (C.desk ? 1.6 : 1);
-  let S = baseS(), animal = C.animal;
+  const baseS = () => clamp(+C.size || 52, 36, 96) * (C.desk ? 1.6 : 1) * EVO_SCALE[evo()];
+  let S = baseS(), animal = C.animal, vis = true;
   const el = doc.createElement('div');
   const face = doc.createElement('div'), acc = doc.createElement('div'), badge = doc.createElement('div'), bub = doc.createElement('div');
   el.style.cssText = `position:fixed;left:0;top:0;z-index:${TOP};user-select:none;-webkit-user-select:none;touch-action:none;cursor:grab;text-align:center`;
+  el.setAttribute('role', 'button'); el.tabIndex = 0;
   acc.style.cssText = 'position:absolute;left:0;right:0;pointer-events:none;line-height:1';
   badge.style.cssText = 'position:absolute;right:-8px;top:-6px;pointer-events:none;line-height:1';
   bub.style.cssText = `position:absolute;background:#fff;color:#222;font:13px/1.4 ${FONT};padding:6px 10px;border-radius:10px;box-shadow:0 2px 10px #0004;display:none;cursor:default;text-align:center;white-space:pre-line;width:max-content;max-width:min(260px,calc(100vw - 24px));max-height:calc(100vh - 16px);overflow:auto;box-sizing:border-box`;
+  bub.setAttribute('role', 'status'); bub.setAttribute('aria-live', 'polite');
   bub.addEventListener('pointerdown', e => e.stopPropagation());
   el.append(face, acc, badge, bub);
   root.appendChild(el);
   function applySize() {
     el.style.width = el.style.height = S + 'px';
     el.style.font = `${Math.round(S * .85)}px/${S}px ${FONT}`;
+    el.setAttribute('aria-label', C.name + ', hewan layar. Tekan Enter untuk menu');
+    face.style.filter = EVO_FX[evo()];
     acc.style.top = -Math.round(S * (C.desk ? .1 : .3)) + 'px'; acc.style.fontSize = Math.round(S * (C.desk ? .3 : .45)) + 'px';
     badge.style.fontSize = Math.round(S * .3) + 'px';
     if (C.desk) { face.textContent = ''; face.appendChild(cv); cv.width = cv.height = Math.round(S * 2); cv.style.width = cv.style.height = S + 'px'; }
@@ -94,12 +120,13 @@
 
   const panel = doc.createElement('div');
   panel.style.cssText = `position:fixed;right:12px;top:12px;width:min(290px,calc(100vw - 24px));max-height:calc(100vh - 24px);overflow:auto;box-sizing:border-box;background:#fff;color:#222;border-radius:12px;box-shadow:0 4px 24px #0006;padding:12px;font:13px/1.4 ${FONT};z-index:${TOP};display:none`;
+  panel.setAttribute('role', 'dialog');
   panel.addEventListener('pointerdown', e => e.stopPropagation());
   root.appendChild(panel);
 
   /* ---------- state ---------- */
   let W = innerWidth, H = innerHeight;
-  let x = W / 3, y = H - S, vx = 0, vy = 0, dir = 1, mode = 'idle', timer = 1, bounce = 0;
+  let x = clamp((st.px != null ? st.px : .33) * W, 0, W - S), y = H - S, vx = 0, vy = 0, dir = 1, mode = 'idle', timer = 1, bounce = 0;
   let hold = false, bt, ht, angryUntil = 0, last = 0, raf, tok = 0;
   let combo = 0, lastClick = 0, lastXp = 0;
   let lastAct = Date.now(), lastR = Date.now(), lastHungry = 0, nextChat = Date.now() + rnd(25, 40) * 6e4, lastSave = 0;
@@ -120,7 +147,7 @@
     love: ex({ heart: 1, col: '#f472b6' }), dizzy: ex({ spiral: 1, col: '#c4b5fd' }),
   };
   const cur = Object.assign({}, BASE), gz = { x: 0, y: 0 }, wand = { x: 0, y: 0 };
-  let eyeCol = '#22d3ee', emoName = 'normal', emoUntil = 0, gazeForce = null, mx = 0, my = 0, lastMove = 0;
+  let eyeCol = '#22d3ee', emoName = 'normal', emoUntil = 0, gazeForce = null, mx = 0, my = 0, lastMove = 0, prevEmo = 'normal';
   let nextBlink = 0, blinkT = 0, nextWander = 0, nextQuirk = Date.now() + 10000, gameTok = 0, landSq = 0, poke = 0;
 
   const hide = () => { bub.style.display = 'none'; clearTimeout(bt); };
@@ -156,14 +183,50 @@
   const sayAuto = (t, ms) => dnd ? false : say(t, ms);
   const toast = t => { toasts.push(t); };
   function release() { hold = false; hide(); vx = vy = 0; bounce = 0; setMode('air', 0); }
+
+  /* ---------- antrean notifikasi (sholat selalu didahulukan) ---------- */
+  const nq = []; let nact = null;
   function notify(text, btns, ms, urgent) {
     if (dnd && !urgent) { if (missed.length < 10) missed.push(text.split('\n')[0].slice(0, 60)); return; }
-    hold = true; const my = ++tok; setMode('idle', 0); setEmo('surprised', 1.5);
-    vx = vy = 0;
-    card(text, btns.map(([l, f]) => [l, () => { f(); release(); }]));
-    if (ms) setTimeout(() => { if (hold && tok === my) release(); }, ms);
-    if (!dnd) beep();
+    nq.push({ text, btns, ms, urgent: !!urgent, t: Date.now() });
+    nq.sort((a, b) => b.urgent - a.urgent);
+    if (urgent && nact && !nact.urgent) { nq.push(nact); nq.sort((a, b) => b.urgent - a.urgent); nact = null; }
+    pump();
   }
+  function pump() {
+    if (nact) return;
+    const n = Date.now();
+    while (nq.length && !nq[0].urgent && n - nq[0].t > 6e5) nq.shift();
+    if (!nq.length) return;
+    if (guide) { if (!nq[0].urgent) return; stopGuide(true); }
+    showNotif(nq.shift());
+  }
+  function showNotif(n) {
+    nact = n; hold = true; setMode('idle', 0); setEmo('surprised', 1.5); vx = vy = 0;
+    if (!vis) toggleVis();
+    card(n.text, n.btns.map(([l, f]) => [l, () => { f(); closeNotif(); }]));
+    if (n.ms) setTimeout(() => { if (nact === n) closeNotif(); }, n.ms);
+    if (!dnd || n.urgent) beep();
+    alertTab(n.text);
+  }
+  function closeNotif() { nact = null; release(); pump(); }
+  /* notifikasi saat tab tersembunyi */
+  let tBlink = null, origTitle = '';
+  function alertTab(text) {
+    if (!doc.hidden) return;
+    try {
+      if (C.notif && window.Notification && Notification.permission === 'granted') {
+        const nt = new Notification(C.name + ' 🐾', { body: text.split('\n')[0], tag: 'aroPet' });
+        nt.onclick = () => { window.focus(); nt.close(); };
+      }
+    } catch (e) {}
+    if (tBlink || window.__aroPip) return;
+    origTitle = doc.title; let on = false;
+    tBlink = setInterval(() => { doc.title = (on = !on) ? '🔔 ' + C.name + ' memanggil' : origTitle; }, 1000);
+  }
+  const stopBlink = () => { if (!tBlink) return; clearInterval(tBlink); tBlink = null; doc.title = origTitle; };
+  const onVisible = () => { if (!doc.hidden) stopBlink(); };
+  doc.addEventListener('visibilitychange', onVisible);
   function beep() {
     if (!C.sound) return;
     try {
@@ -173,8 +236,13 @@
       o.start(); o.stop(a.currentTime + .6);
     } catch (e) {}
   }
+  function toggleVis() {
+    vis = !vis; const d = vis ? '' : 'none';
+    el.style.display = d; if (item) item.el.style.display = d; if (bud) bud.el.style.display = d;
+    if (!vis) { panel.style.display = 'none'; }
+  }
 
-  /* ---------- XP, level, prestasi ---------- */
+  /* ---------- XP, level, prestasi, quest ---------- */
   const ACH = [
     ['kenyal', '🫧 Si Kenyal', 'Klik 100x', () => st.tot.click >= 100, () => `${st.tot.click}/100`],
     ['striker', '⚽ Striker', 'Tendang bola 50x', () => st.tot.kick >= 50, () => `${st.tot.kick}/50`],
@@ -187,13 +255,30 @@
     ['kilat', '⚡ Kilat', 'Refleks di bawah 250 ms', () => st.g.reflex > 0 && st.g.reflex < 250, () => st.g.reflex ? st.g.reflex + ' ms' : 'belum'],
     ['trik', '🎪 Pecinta Trik', 'Lihat 10 trik', () => st.tot.trick >= 10, () => `${st.tot.trick}/10`],
   ];
+  const QPOOL = [
+    ['water', 'Minum {n} gelas', [4, 6, 8]], ['kick', 'Tendang bola {n}x', [10, 20]], ['fed', 'Beri makan {n}x', [2, 3]],
+    ['purr', 'Elus {n}x', [2, 3]], ['guide', 'Selesaikan {n} sesi napas/peregangan', [1, 2]], ['click', 'Klik hewan {n}x', [30, 50]], ['trick', 'Lihat {n} trik', [3, 5]],
+  ];
+  function ensureQuest() {
+    const d = dayKey(0); if (st.quest && st.quest.date === d) return;
+    const pool = QPOOL.slice().sort(() => Math.random() - .5).slice(0, 3);
+    st.quest = { date: d, list: pool.map(([k, t, ns]) => { const n = pick(ns); return { k, text: t.replace('{n}', n), need: n, base: st.tot[k] || 0, done: 0 }; }) };
+    saveS();
+  }
+  const qProg = q => Math.min(q.need, (st.tot[q.k] || 0) - q.base);
   function levelUp(L) {
     const h = Object.keys(HAT_LV).find(k => HAT_LV[k] === L);
     toast(`🎉 Level ${L}!` + (h ? ` Aksesori ${h} terbuka` : '')); if (!wx) weather('confetti', 4); setEmo('love', 2.5);
+    if (evoOf(L) !== evoOf(L - 1)) {
+      toast('🌟 Evolusi! ' + C.name + ' tampil lebih gagah'); S = baseS(); applySize(); x = clamp(x, 0, W - S); y = clamp(y, 0, H - S);
+    }
   }
   function checkAch() {
     for (const [id, title, , test] of ACH) {
       if (!st.ach[id] && test()) { st.ach[id] = 1; const b = lvl(); st.xp += 25; toast('🏆 Prestasi: ' + title + ' (+25 XP)'); if (lvl() > b) levelUp(lvl()); }
+    }
+    if (st.quest) for (const q of st.quest.list) {
+      if (!q.done && (st.tot[q.k] || 0) - q.base >= q.need) { q.done = 1; const b = lvl(); st.xp += 15; toast('📜 Quest selesai: ' + q.text + ' (+15 XP)'); if (lvl() > b) levelUp(lvl()); }
     }
   }
   function gain(n, key) {
@@ -201,7 +286,16 @@
     if (lvl() > b) levelUp(lvl());
     checkAch();
   }
-  function drink() { st.water++; gain(2, 'water'); saveS(); }
+  function drink() {
+    st.water++; hist().w++; gain(2, 'water');
+    if (st.water === (C.waterGoal || 8)) goalHit();
+    saveS();
+  }
+  function goalHit() {
+    const t = dayKey(0); if (st.goalDay === t) return;
+    st.streak = st.goalDay === dayKey(-1) ? st.streak + 1 : 1; st.goalDay = t;
+    toast(`🎯 Target minum tercapai! Streak ${st.streak} hari 🔥 (+10 XP)`); gain(10); setEmo('love', 2.5);
+  }
 
   /* ---------- efek ---------- */
   function fx(e, px, py) {
@@ -314,7 +408,8 @@
       el.style.cursor = 'grab';
       if (moved) {
         vx = a; vy = b; bounce = .55; mode = 'air'; emoUntil = 0;
-        if (Math.hypot(vx, vy) > 800) { say('Wuaaa! 😵', 1200); setEmo('dizzy', 1.8); }
+        if (Math.hypot(vx, vy) > 800) { say('Wuaaa! 😵', 1200); setEmo('dizzy', 8); }
+        st.px = x / W;
       } else if (!hold) click(e);
     },
   });
@@ -332,6 +427,9 @@
     else if (combo >= 3) { say('💥 x' + combo, 700); jump(); setEmo('surprised', .6); }
     else { say('!', 600); jump(); setEmo('surprised', .6); }
   }
+  el.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openMenu(); }
+  });
   el.addEventListener('mouseenter', () => { ht = setTimeout(() => { if (mode !== 'drag' && !hold) { say(status(), 4500); setEmo('happy', 2); st.happy = clamp(st.happy + 1, 0, 100); } }, 700); });
   el.addEventListener('mouseleave', () => clearTimeout(ht));
   el.addEventListener('contextmenu', e => { e.preventDefault(); e.stopPropagation(); openMenu(); });
@@ -352,6 +450,7 @@
     const s = Math.round(S * .6), e = doc.createElement('div');
     e.textContent = emoji;
     e.style.cssText = `position:fixed;left:0;top:0;z-index:${TOP - 1};width:${s}px;height:${s}px;font:${Math.round(s * .85)}px/${s}px ${FONT};text-align:center;cursor:grab;user-select:none;-webkit-user-select:none;touch-action:none`;
+    if (!vis) e.style.display = 'none';
     root.appendChild(e);
     item = { k, el: e, s, x: rnd(W * .15, W * .85 - s), y: 0, vx: 0, vy: 0, drag: false, cool: 0 };
     drag(e, {
@@ -397,6 +496,7 @@
     const s = Math.round(S * .62), e = doc.createElement('div');
     e.textContent = C.buddy;
     e.style.cssText = `position:fixed;left:0;top:0;z-index:${TOP - 1};width:${s}px;height:${s}px;font:${Math.round(s * .85)}px/${s}px ${FONT};text-align:center;cursor:pointer;user-select:none;-webkit-user-select:none`;
+    if (!vis) e.style.display = 'none';
     e.addEventListener('pointerdown', ev => { ev.stopPropagation(); if (bud) { bud.vy = -520; fx('❤️', ev.clientX, ev.clientY); } });
     root.appendChild(e);
     bud = { el: e, s, x: clamp(x - S * 1.3, 0, W - s), y: H - s, vy: 0, dir: 1 };
@@ -429,7 +529,8 @@
     g.arcTo(x0, y0 + h, x0, y0, r); g.arcTo(x0, y0, x0 + w, y0, r); g.closePath();
   }
   function drawBuddy(dt, t, n) {
-    const E = EXPR[emoNow(n)] || EXPR.normal, k = Math.min(1, dt * 14);
+    const nm = emoNow(n), E = EXPR[nm] || EXPR.normal, k = Math.min(1, dt * 14);
+    prevEmo = nm;
     eyeCol = E.col || C.eye;
     for (const key in BASE) cur[key] += (E[key] - cur[key]) * k;
     if (n > nextBlink) { blinkT = n; nextBlink = n + rnd(2500, 6000); }
@@ -485,13 +586,14 @@
   const BREATH = [];
   for (let i = 0; i < 5; i++) BREATH.push({ t: 'Tarik napas... 🌬', s: 4, k: 'in' }, { t: 'Tahan...', s: 4, k: 'hold' }, { t: 'Hembuskan pelan 😮‍💨', s: 4, k: 'out' });
   function startGuide(name, steps) {
+    if (nact) { nq.unshift(nact); nact = null; }
     closePanel(); hold = true; ++tok; setMode('idle', 0); vx = vy = 0;
     card('', [['Berhenti', () => stopGuide()]]);
     guide = { name, steps, i: 0, end: Date.now() + steps[0].s * 1000, tdiv: bub.firstChild, shown: '' };
   }
   function stopGuide(silent) { guide = null; release(); if (silent !== true) say('Dihentikan', 1500); }
   function finishGuide() {
-    const g = guide; guide = null; release(); gain(10, 'guide'); setEmo('happy', 2.5); say('✅ ' + g.name + ' selesai! +10 XP', 3500);
+    const g = guide; guide = null; release(); hist().g++; gain(10, 'guide'); setEmo('happy', 2.5); say('✅ ' + g.name + ' selesai! +10 XP', 3500);
   }
   function guideK(n) {
     const s = guide.steps[guide.i]; if (!s.k) return 1;
@@ -532,7 +634,11 @@
       if (y >= H - S) {
         y = H - S; landSq = clamp(Math.abs(vy) / 900, .3, 1);
         if (bounce && Math.abs(vy) > 150) { vy = -vy * bounce; vx *= .8; }
-        else { vy = 0; vx = 0; setMode('idle', 1 + Math.random() * 2); }
+        else {
+          vy = 0; vx = 0;
+          if (emoName === 'dizzy' && emoUntil > n) { setEmo('dizzy', 2.8); setMode('idle', 2.8); }
+          else setMode('idle', 1 + Math.random() * 2);
+        }
       }
       if (!hold) touchItem();
     } else if (mode === 'chase') {
@@ -559,14 +665,15 @@
     updBuddy(dt);
     if (wx) drawWx(dt, t);
     const angry = n < angryUntil;
-    const f = angry ? (animal === '🐱' ? '😾' : '😤') : animal;
+    const dz = emoName === 'dizzy' && emoUntil > n;
+    const f = angry ? (animal === '🐱' ? '😾' : '😤') : dz ? '😵' : animal;
     if (!C.desk && face.textContent !== f) face.textContent = f;
     const bg = dnd ? '🔕' + (missed.length || '') : mode === 'sleep' ? '💤' : angry ? '💢' : st.hunger > 70 ? '🍖' : '';
     if (badge.textContent !== bg) badge.textContent = bg;
     const sh = angry ? Math.sin(t / 30) * 3 : 0;
     let sy = 1, lift = 0, rot = 0, org = '50% 100%';
     if (mode === 'trick' && trick) {
-      const p = clamp((n - trick.dur * 0 - trick.t0) / trick.dur, 0, 1);
+      const p = clamp((n - trick.t0) / trick.dur, 0, 1);
       if (trick.k === 'roll') { rot = 720 * p * dir; org = '50% 55%'; }
       else if (trick.k === 'dance') { const w = Math.sin(t / 110); rot = w * 12; sy = .9 + .2 * Math.abs(w); lift = Math.abs(w) * S * .08; if (n - trick.fx > 500) { trick.fx = n; fx(pick(['🎵', '🎶']), x + S / 2, y); } }
       else if (trick.k === 'clap') { sy = 1 + Math.sin(t / 80) * .1; if (n - trick.fx > 350) { trick.fx = n; fx('👏', x + S / 2 + rnd(-S / 2, S / 2), y); } }
@@ -592,7 +699,7 @@
   /* ---------- panel ---------- */
   const closePanel = () => { gameTok++; panel.style.display = 'none'; panel.textContent = ''; };
   function openPanel(title, build) {
-    panel.textContent = '';
+    panel.textContent = ''; panel.setAttribute('aria-label', title);
     const h = doc.createElement('div'); h.textContent = title; h.style.cssText = 'font-weight:700;margin-bottom:8px;font-size:14px';
     panel.appendChild(h); build(panel); panel.style.display = 'block';
   }
@@ -608,13 +715,17 @@
   }
   const sec = (p, t) => { const d = doc.createElement('div'); d.textContent = t; d.style.cssText = 'font-size:11px;color:#667;margin:8px 0 4px;text-transform:uppercase;letter-spacing:.04em'; p.appendChild(d); };
   const act = f => () => { closePanel(); f(); };
+  function bar(p, pc, col) {
+    const b = doc.createElement('div'); b.style.cssText = 'height:8px;background:#e2e8f0;border-radius:4px;margin-bottom:8px;overflow:hidden';
+    const f = doc.createElement('div'); f.style.cssText = `height:100%;width:${Math.round(clamp(pc, 0, 1) * 100)}%;background:${col || '#2563eb'}`; b.appendChild(f); p.appendChild(b);
+  }
   function openMenu() {
     gameTok++;
-    openPanel(`${C.name} ${moodTxt()} · Lv ${lvl()}`, p => {
+    openPanel(`${C.name} ${'⭐'.repeat(evo())} ${moodTxt()} · Lv ${lvl()}`, p => {
       sec(p, 'Rawat');
       grid(p, [
         ['🍖 Makan', act(() => spawnItem('food', '🍖'))], ['⚽ Bola', act(() => spawnItem('ball', '⚽'))],
-        ['🧹 Bersihkan', act(removeItem)], ['💧 Minum +1', act(() => { drink(); say('💧 ' + st.water + ' gelas hari ini', 2500); })],
+        ['🧹 Bersihkan', act(removeItem)], ['💧 Minum +1', act(() => { drink(); say(`💧 ${st.water}/${C.waterGoal || 8} gelas hari ini`, 2500); })],
       ]);
       sec(p, 'Seru');
       grid(p, [
@@ -630,7 +741,7 @@
       ]);
       sec(p, 'Lainnya');
       grid(p, [
-        ['🏆 Level', showLevel], ['🕌 Jadwal', showSchedule],
+        ['🏆 Level', showLevel], ['📊 Statistik & Quest', showStats], ['🕌 Jadwal', showSchedule],
         ['⚙️ Pengaturan', openSettings], ['🔔 Tes', act(() => notify('Tes reminder ✅', [['Oke', () => {}]], 0, true))],
         [C.desk ? '🐱 Mode Emoji' : '👀 Mode Desk Buddy', act(() => { C.desk = !C.desk; saveC(); applyCfg(); say(C.desk ? 'Mode Desk Buddy 👀' : 'Mode Emoji 🐱', 2000); })],
         ['❌ Hilangkan', () => destroy(), '#dc2626'], ['Tutup', closePanel],
@@ -646,21 +757,44 @@
   }
   function showSchedule() {
     const [y0, m0, d0] = ymd(), T = dayTimes(y0, m0, d0);
-    const jum = new Date(Date.UTC(y0, m0 - 1, d0)).getUTCDay() === 5 ? ' (Jumat)' : '';
     openPanel('🕌 Jadwal sholat · ' + C.city, p => {
       const t = doc.createElement('div'); t.style.cssText = 'white-space:pre-line;margin-bottom:8px';
-      t.textContent = Object.keys(T).map(k => k + (k === 'Dzuhur' ? jum : '') + '  ' + hhmm(T[k])).join('\n') + '\n\nPerkiraan hitungan Kemenag, cocokkan dengan jadwal resmi.';
+      t.textContent = Object.keys(T).map(k => k + '  ' + hhmm(T[k])).join('\n') + '\n\nPerkiraan hitungan Kemenag, cocokkan dengan jadwal resmi.';
       p.appendChild(t); grid(p, [['Tutup', closePanel]]);
     });
   }
   function showLevel() {
     openPanel('🏆 Level & prestasi', p => {
-      const L = lvl(), a = lvXp(L), b = lvXp(L + 1), pc = clamp((st.xp - a) / (b - a), 0, 1);
-      gtext(p, `Level ${L} · ${st.xp} XP\nKe level ${L + 1}: ${b - st.xp} XP lagi`);
-      const bar = doc.createElement('div'); bar.style.cssText = 'height:8px;background:#e2e8f0;border-radius:4px;margin-bottom:8px;overflow:hidden';
-      const fill = doc.createElement('div'); fill.style.cssText = `height:100%;width:${Math.round(pc * 100)}%;background:#2563eb`; bar.appendChild(fill); p.appendChild(bar);
+      const L = lvl(), a = lvXp(L), b = lvXp(L + 1);
+      gtext(p, `Level ${L} · ${st.xp} XP · Evolusi ${evo()}/3\nKe level ${L + 1}: ${b - st.xp} XP lagi`);
+      bar(p, (st.xp - a) / (b - a));
+      gtext(p, 'Evolusi: Lv 4, Lv 8, Lv 15 (ukuran dan cahaya bertambah)');
       gtext(p, 'Aksesori: ' + Object.keys(HAT_LV).map(h => `${h} Lv${HAT_LV[h]}`).join('  '));
       gtext(p, ACH.map(([id, title, desc, , prog]) => (st.ach[id] ? '✅ ' : '🔒 ') + title + ' · ' + desc + (st.ach[id] ? '' : ` (${prog()})`)).join('\n'));
+      grid(p, [['Tutup', closePanel]]);
+    });
+  }
+  function showStats() {
+    ensureQuest();
+    openPanel('📊 Statistik & Quest', p => {
+      const goal = C.waterGoal || 8, DN = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'], [y0, m0, d0] = ymd();
+      gtext(p, `💧 Hari ini ${st.water}/${goal} gelas · Streak ${streak()} hari 🔥`);
+      bar(p, st.water / goal, st.water >= goal ? '#16a34a' : '#2563eb');
+      const days = [-6, -5, -4, -3, -2, -1, 0].map(o => ({ o, h: st.hist[dayKey(o)] || { w: 0, g: 0, a: 0 } }));
+      const mx = Math.max(goal, ...days.map(d => d.h.w), 1);
+      gtext(p, '7 hari terakhir (gelas)');
+      const ch = doc.createElement('div'); ch.style.cssText = 'display:flex;align-items:flex-end;gap:4px;height:70px;margin-bottom:8px';
+      days.forEach(d => {
+        const c = doc.createElement('div'); c.style.cssText = 'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;font-size:10px;color:#667';
+        const b = doc.createElement('div'); b.style.cssText = `width:100%;border-radius:3px;background:${d.h.w >= goal ? '#16a34a' : '#2563eb'};height:${Math.round(d.h.w / mx * 44) + 2}px`;
+        const wd = new Date(Date.UTC(y0, m0 - 1, d0 + d.o)).getUTCDay();
+        c.append(doc.createTextNode(d.h.w), b, doc.createTextNode(DN[wd])); ch.appendChild(c);
+      });
+      p.appendChild(ch);
+      const sa = days.reduce((s, d) => s + d.h.a, 0), sg = days.reduce((s, d) => s + d.h.g, 0);
+      gtext(p, `Aktif ±${Math.round(sa / 6) / 10} jam · Sesi napas/peregangan: ${sg}`);
+      sec(p, 'Quest hari ini');
+      gtext(p, st.quest.list.map(q => (q.done ? '✅ ' : '⬜ ') + q.text + ` (${qProg(q)}/${q.need})`).join('\n'));
       grid(p, [['Tutup', closePanel]]);
     });
   }
@@ -744,7 +878,7 @@
     const draw = () => openPanel('⭕ Tic-tac-toe', p => {
       gtext(p, msg + `\nKamu ${st.g.ttt[0]} · Aku ${st.g.ttt[1]} · Seri ${st.g.ttt[2]}`);
       const gd = doc.createElement('div'); gd.style.cssText = 'display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px';
-      b.forEach((v, i) => { const c = btn(v || '·', () => move(i)); c.style.cssText += ';font-size:22px;padding:10px 0;flex:none'; gd.appendChild(c); });
+      b.forEach((v, i) => { const c = btn(v || '·', () => move(i)); c.style.cssText += ';font-size:22px;padding:10px 0;flex:none'; c.setAttribute('aria-label', 'Kotak ' + (i + 1) + (v ? ' ' + v : ' kosong')); gd.appendChild(c); });
       p.appendChild(gd); grid(p, [['Ulang', gTtt]]); gfoot(p);
     });
     const end = (m, k, emo) => { over = true; msg = m; st.g.ttt[k]++; setEmo(emo, 2.5); if (k === 0) gain(8, 'win'); };
@@ -766,7 +900,7 @@
     const draw = () => openPanel('🧠 Memory', p => {
       gtext(p, msg + `\nLangkah: ${moves}` + (st.g.mem ? ` · Rekor: ${st.g.mem}` : ''));
       const gd = doc.createElement('div'); gd.style.cssText = 'display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px';
-      cards.forEach((c, i) => { const b = btn(open.includes(i) || done.has(i) ? c : '❓', () => flip(i)); b.style.cssText += ';font-size:20px;padding:8px 0;flex:none'; gd.appendChild(b); });
+      cards.forEach((c, i) => { const b = btn(open.includes(i) || done.has(i) ? c : '❓', () => flip(i)); b.style.cssText += ';font-size:20px;padding:8px 0;flex:none'; b.setAttribute('aria-label', 'Kartu ' + (i + 1) + (open.includes(i) || done.has(i) ? ' ' + c : ' tertutup')); gd.appendChild(b); });
       p.appendChild(gd); grid(p, [['Ulang', gMem]]); gfoot(p);
     });
     const flip = i => {
@@ -787,7 +921,7 @@
     openPanel('🔨 Pukul tikus', p => {
       info = doc.createElement('div'); info.style.cssText = 'margin-bottom:8px;white-space:pre-line'; info.textContent = 'Pukul 🐹 secepatnya selama 20 detik!' + (st.g.whack ? `\nRekor: ${st.g.whack}` : ''); p.appendChild(info);
       const gd = doc.createElement('div'); gd.style.cssText = 'display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px';
-      for (let i = 0; i < 9; i++) { const c = btn('·', () => hit(i)); c.style.cssText += ';font-size:24px;padding:10px 0;flex:none'; cells.push(c); gd.appendChild(c); }
+      for (let i = 0; i < 9; i++) { const c = btn('·', () => hit(i)); c.style.cssText += ';font-size:24px;padding:10px 0;flex:none'; c.setAttribute('aria-label', 'Lubang ' + (i + 1)); cells.push(c); gd.appendChild(c); }
       p.appendChild(gd); sbtn = btn('Mulai', () => start(), '#2563eb'); sbtn.style.cssText += ';width:100%;flex:none;margin-bottom:6px'; p.appendChild(sbtn); gfoot(p);
     });
     const show = i => { mole = i; cells.forEach((c, k) => { c.textContent = k === i ? '🐹' : '·'; }); };
@@ -855,7 +989,7 @@
   };
   function exportCfg() {
     const a = doc.createElement('a');
-    a.href = URL.createObjectURL(new Blob([JSON.stringify({ v: 3, cfg: C, st }, null, 1)], { type: 'application/json' }));
+    a.href = URL.createObjectURL(new Blob([JSON.stringify({ v: 4, cfg: C, st }, null, 1)], { type: 'application/json' }));
     a.download = 'pet-backup.json'; root.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   }
   function importCfg() {
@@ -866,7 +1000,7 @@
         try {
           const d = JSON.parse(r.result); if (!d || typeof d !== 'object' || !d.cfg || typeof d.cfg !== 'object') throw new Error('format salah');
           for (const k in DEF) if (k in d.cfg && typeof d.cfg[k] === typeof DEF[k]) C[k] = d.cfg[k];
-          if (d.st && typeof d.st === 'object') for (const k of ['water', 'kicks', 'fed', 'best', 'hunger', 'happy', 'xp', 'tot', 'ach', 'g', 'seen']) if (k in d.st && typeof d.st[k] === typeof st[k]) st[k] = d.st[k];
+          if (d.st && typeof d.st === 'object') for (const k of ['water', 'kicks', 'fed', 'best', 'hunger', 'happy', 'xp', 'tot', 'ach', 'g', 'seen', 'streak', 'goalDay', 'hist', 'quest']) if (k in d.st && typeof d.st[k] === typeof st[k]) st[k] = d.st[k];
           st.g = Object.assign({ rps: [0, 0, 0], ttt: [0, 0, 0], reflex: 0, gaze: 0, mem: 0, whack: 0, catch: 0 }, st.g);
           st.tot = Object.assign({ click: 0, kick: 0, fed: 0, purr: 0, guide: 0, win: 0, water: 0, trick: 0, bestCombo: 0 }, st.tot);
           saveC(); saveS(); applyCfg(); closePanel(); say('Impor berhasil ✅', 2500);
@@ -895,9 +1029,11 @@
       row('size', 'Ukuran', inp('range', C.size, { min: 36, max: 96 }));
       row('sound', 'Suara', inp('checkbox', C.sound));
       row('eco', 'Hemat baterai', inp('checkbox', C.eco));
+      row('notif', 'Notifikasi saat tab tersembunyi', inp('checkbox', C.notif));
       sec(p, 'Reminder');
       row('sitMin', 'Duduk (mnt, 0=off)', inp('number', C.sitMin, { min: 0 }));
       row('waterMin', 'Minum (mnt, 0=off)', inp('number', C.waterMin, { min: 0 }));
+      row('waterGoal', 'Target minum (gelas/hari)', inp('number', C.waterGoal, { min: 1 }));
       row('eyeMin', 'Istirahat mata (mnt)', inp('number', C.eyeMin, { min: 0 }));
       row('city', 'Kota sholat', sel(Object.keys(CITIES).map(c => [c, c]), C.city));
       row('before', 'Sholat: ingatkan (mnt)', inp('number', C.before, { min: 0 }));
@@ -914,9 +1050,11 @@
         ['Simpan', () => {
           C.name = f.name.value.trim() || DEF.name; C.owner = f.owner.value.trim();
           C.animal = f.animal.value; C.hat = f.hat.value; C.buddy = f.buddy.value;
-          C.desk = f.desk.checked; C.eye = f.eye.value; C.eco = f.eco.checked;
+          C.desk = f.desk.checked; C.eye = f.eye.value; C.eco = f.eco.checked; C.notif = f.notif.checked;
+          if (C.notif && window.Notification && Notification.permission === 'default') { try { Notification.requestPermission(); } catch (e) {} }
           C.size = clamp(+f.size.value || 52, 36, 96); C.sound = f.sound.checked;
           ['sitMin', 'waterMin', 'eyeMin', 'before'].forEach(k => { C[k] = Math.max(0, +f[k].value || 0); });
+          C.waterGoal = Math.max(1, +f.waterGoal.value || 8);
           C.city = f.city.value; C.endTime = f.endTime.value; C.quietFrom = f.quietFrom.value; C.quietTo = f.quietTo.value;
           saveC(); applyCfg(); updDnd(); closePanel(); say('Tersimpan ✅', 1500);
         }, '#2563eb'],
@@ -934,7 +1072,7 @@
   function status() {
     const n = Date.now(), np = nextPrayer(n), m = Math.max(0, Math.round((np[1] - n) / 6e4));
     const left = m >= 60 ? Math.floor(m / 60) + ' j ' + (m % 60) + ' mnt' : m + ' mnt';
-    let s = `${C.name} · Lv ${lvl()} · ${moodTxt()}\n❤ ${Math.round(st.happy)}%  🍖 ${Math.round(st.hunger)}%\n🕌 ${np[0]} ${left} lagi (${hhmm(np[1])})\n💧 ${st.water} gelas  ⚽ ${st.kicks}  💥 ${st.best}`;
+    let s = `${C.name} ${'⭐'.repeat(evo())} · Lv ${lvl()} · ${moodTxt()}\n❤ ${Math.round(st.happy)}%  🍖 ${Math.round(st.hunger)}%\n🕌 ${np[0]} ${left} lagi (${hhmm(np[1])})\n💧 ${st.water}/${C.waterGoal || 8}  🔥 ${streak()}  ⚽ ${st.kicks}  💥 ${st.best}`;
     if (pomo) s += `\n🍅 ${pomo.phase === 'focus' ? 'Fokus' : 'Istirahat'} ${Math.ceil((pomo.end - n) / 6e4)} mnt`;
     if (dnd) s += '\n🔕 Mode diam' + (missed.length ? ` (${missed.length} tertahan)` : '');
     return s;
@@ -944,7 +1082,7 @@
     pomo = { phase: 'focus', end: Date.now() + 25 * 6e4, cycle: 0 }; say('🍅 Fokus 25 menit dimulai', 3000);
   }
   function pomoStep(n) {
-    if (!pomo || n < pomo.end || hold) return;
+    if (!pomo || n < pomo.end) return;
     if (pomo.phase === 'focus') {
       pomo.cycle++; const m = pomo.cycle % 4 === 0 ? 15 : 5; pomo.phase = 'break'; pomo.end = n + m * 6e4;
       notify(`🍅 Fokus selesai! Istirahat ${m} menit ☕\nBerdiri, minum, regangkan badan.`, [['Oke', () => {}]]);
@@ -989,6 +1127,30 @@
   evs.forEach(a => addEventListener(a, onAct, true));
   addEventListener('pointermove', onMove, true);
 
+  /* ---------- pintasan keyboard, kecepatan ketik, baterai, koneksi ---------- */
+  const kt = []; let lastFast = 0;
+  const onKey = e => {
+    if (e.ctrlKey && e.altKey && (e.code === 'KeyP' || e.key === 'p' || e.key === 'P')) { e.preventDefault(); toggleVis(); return; }
+    if (e.key === 'Escape' && panel.style.display === 'block') { closePanel(); return; }
+    if ((e.key || '').length === 1 && !panel.contains(e.target)) {
+      const n = Date.now(); kt.push(n); while (kt.length && n - kt[0] > 5000) kt.shift();
+      if (kt.length >= 40 && n - lastFast > 6e5 && !dnd) { lastFast = n; kt.length = 0; toast('⌨️ Wih, ngetiknya ngebut! Jari jangan lupa istirahat 🔥'); setEmo('surprised', 1.5); }
+    }
+  };
+  addEventListener('keydown', onKey, true);
+  let batt = null, lowWarned = false;
+  const onBatt = () => {
+    if (!batt) return; const l = Math.round(batt.level * 100);
+    if (batt.charging) { lowWarned = false; return; }
+    if (l <= 20 && !lowWarned) { lowWarned = true; toast(`🔋 Baterai tinggal ${l}%. Colok charger ya`); }
+    else if (l > 30) lowWarned = false;
+  };
+  if (navigator.getBattery) navigator.getBattery().then(b => {
+    if (dead) return; batt = b; b.addEventListener('levelchange', onBatt); b.addEventListener('chargingchange', onBatt); onBatt();
+  }).catch(() => {});
+  const onOff = () => toast('📡 Koneksi internet terputus'), onOn = () => toast('📶 Internet tersambung lagi');
+  addEventListener('offline', onOff); addEventListener('online', onOn);
+
   /* ---------- reminder ---------- */
   const LINES = [
     'Astaghfirullah, istighfar sebentar yuk 🤲', "Hasbunallah wa ni'mal wakil 🤍", 'Laa hawla wa laa quwwata illaa billaah 🌿',
@@ -1001,20 +1163,25 @@
     ['ny', 1228, 103, 'Menjelang tahun baru! Coba aksesori 🎆 di Pengaturan'],
   ];
   function rollDay() {
-    const d = ymd().join('-');
-    if (st.date !== d) { st.date = d; st.water = 0; st.kicks = 0; st.fed = 0; st.best = 0; st.greet = {}; saveS(); }
+    const d = dayKey(0);
+    if (st.date !== d) {
+      st.date = d; st.water = 0; st.kicks = 0; st.fed = 0; st.best = 0; st.greet = {};
+      const keep = new Set(Array.from({ length: 14 }, (_, i) => dayKey(-i)));
+      for (const k in st.hist) if (!keep.has(k)) delete st.hist[k];
+      saveS();
+    }
+    ensureQuest();
   }
   function checkPrayer(n) {
     const [y0, m0, d0] = ymd(), T = dayTimes(y0, m0, d0), id = [y0, m0, d0, C.city].join('');
-    const jum = new Date(Date.UTC(y0, m0 - 1, d0)).getUTCDay() === 5;
     for (const k in T) {
-      const t = T[k].getTime(), kb = id + k + 'b', ka = id + k + 'a', name = k === 'Dzuhur' && jum ? 'Dzuhur (Jumatan)' : k;
+      const t = T[k].getTime(), kb = id + k + 'b', ka = id + k + 'a';
       if (n >= t && n < t + 3e5 && !fired[ka]) {
-        if (hold) return; fired[ka] = fired[kb] = 1;
-        notify(`🕌 Waktu ${name} sudah masuk (${hhmm(T[k])}). Yuk sholat 🤲`, [['Oke', () => {}]], 0, true);
+        fired[ka] = fired[kb] = 1;
+        notify(`🕌 Waktu ${k} sudah masuk (${hhmm(T[k])}). Yuk sholat 🤲`, [['Oke', () => {}]], 0, true);
       } else if (C.before > 0 && n >= t - C.before * 6e4 && n < t && !fired[kb]) {
-        if (hold) return; fired[kb] = 1;
-        notify(`🕌 ${name} ${C.before} menit lagi (${hhmm(T[k])}). Siap-siap wudhu.`, [['Oke', () => {}]], 0, true);
+        fired[kb] = 1;
+        notify(`🕌 ${k} ${C.before} menit lagi (${hhmm(T[k])}). Siap-siap wudhu.`, [['Oke', () => {}]], 0, true);
       }
     }
   }
@@ -1032,7 +1199,7 @@
       if (inR && !st.seen[sk]) { st.seen[sk] = 1; toast(msg); saveS(); }
     }
     const em = hm(C.endTime); if (em < 0 || !isWeekday()) return;
-    if (mm >= em && mm < em + 30 && !fired[id + 'end'] && !hold && !dnd) {
+    if (mm >= em && mm < em + 30 && !fired[id + 'end'] && !dnd) {
       fired[id + 'end'] = fired[id + 'pre'] = 1; weather('confetti', 6);
       notify('🎉 Waktunya pulang! Rapikan meja, jangan lupa istirahat 🎒', [['Siap', () => {}]]);
     } else if (mm >= em - 30 && mm < em && !fired[id + 'pre'] && !hold) {
@@ -1042,27 +1209,27 @@
   function tickR() {
     const n = Date.now(), dt = Math.min(120, (n - lastR) / 1000); lastR = n;
     rollDay(); updDnd(); { const m = nowMin(); night = m >= 22 * 60 || m < 4 * 60; }
-    if (isActive(n)) { A.sit += dt; A.eye += dt; A.water += dt; } else { A.sit = 0; A.eye = 0; }
+    if (isActive(n)) { A.sit += dt; A.eye += dt; A.water += dt; hist().a += dt / 60; } else { A.sit = 0; A.eye = 0; }
     st.hunger = clamp(st.hunger + dt * .0093, 0, 100);
     st.happy = clamp(st.happy - dt * (st.hunger > 80 ? .02 : .01), 0, 100);
     if (n - lastSave > 3e4) { lastSave = n; saveS(); }
-    if (C.sitMin > 0 && A.sit >= C.sitMin * 60 && !hold) {
+    if (C.sitMin > 0 && A.sit >= C.sitMin * 60) {
       A.sit = 0; A.eye = 0;
       notify(`Sudah ±${C.sitMin} menit duduk. Berdiri dulu, regangkan badan 🧘`, [
         ['Peregangan 30 dtk', () => setTimeout(() => startGuide('Peregangan', STRETCH), 0)], ['Oke', () => {}],
         [`Tunda ${C.snoozeMin} menit`, () => { A.sit = (C.sitMin - C.snoozeMin) * 60; }],
       ]);
     }
-    if (C.eyeMin > 0 && A.eye >= C.eyeMin * 60 && !hold) {
+    if (C.eyeMin > 0 && A.eye >= C.eyeMin * 60) {
       A.eye = 0; notify('👀 Istirahat mata: lihat sesuatu yang jauh selama 20 detik.', [['Sudah', () => {}]], 25000);
     }
-    if (C.waterMin > 0 && A.water >= C.waterMin * 60 && !hold) {
+    if (C.waterMin > 0 && A.water >= C.waterMin * 60) {
       A.water = 0;
-      notify(`💧 Waktunya minum! Hari ini: ${st.water} gelas.`, [
+      notify(`💧 Waktunya minum! Hari ini: ${st.water}/${C.waterGoal || 8} gelas.`, [
         ['Sudah minum 💧', () => drink()], ['Nanti 15 mnt', () => { A.water = (C.waterMin - 15) * 60; }],
       ]);
     }
-    pomoStep(n); checkPrayer(n); checkDay(n); checkAch();
+    pomoStep(n); checkPrayer(n); checkDay(n); checkAch(); pump();
     if (toasts.length && !dnd && say(toasts[0], 6000)) toasts.shift();
     if (st.hunger > 75 && n - lastHungry > 18e5 && !hold && sayAuto('Aku lapar 🍖 (klik kanan → Makan)', 4000)) lastHungry = n;
     if (n >= nextChat && !hold && mode !== 'sleep') {
@@ -1082,17 +1249,21 @@
   };
   addEventListener('resize', rs);
   function destroy() {
-    gameTok++; cancelAnimationFrame(raf); clearInterval(iv); clearTimeout(bt); clearTimeout(ht);
+    gameTok++; cancelAnimationFrame(raf); clearInterval(iv); clearTimeout(bt); clearTimeout(ht); stopBlink();
     evs.forEach(a => removeEventListener(a, onAct, true)); removeEventListener('resize', rs); removeEventListener('pointermove', onMove, true);
+    removeEventListener('keydown', onKey, true); removeEventListener('offline', onOff); removeEventListener('online', onOn);
+    doc.removeEventListener('visibilitychange', onVisible);
+    if (batt) { batt.removeEventListener('levelchange', onBatt); batt.removeEventListener('chargingchange', onBatt); }
     if (idleAbort) idleAbort.abort();
     saveS(); removeItem(); if (bud) bud.el.remove(); if (wx) wx.cv.remove();
     panel.remove(); el.remove(); delete window.__aroPet;
   }
   window.__aroPet = { destroy, setEmo };
-  applyCfg(); updDnd();
+  applyCfg(); updDnd(); rollDay();
   if (C.sysIdle && 'IdleDetector' in window && navigator.permissions) {
     navigator.permissions.query({ name: 'idle-detection' }).then(p => { if (p.state === 'granted') startIdle().catch(() => {}); }).catch(() => {});
   }
   setTimeout(tickR, 1500);
   raf = requestAnimationFrame(tick);
+  }
 })();
