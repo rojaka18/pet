@@ -1,4 +1,4 @@
-/* Pet layar v4. Bookmarklet atau ekstensi. Klik bookmarklet lagi = hilang. Ctrl+Alt+P = sembunyi/tampil. */
+/* Pet layar v4.1. Bookmarklet atau ekstensi. Klik bookmarklet lagi = hilang. Ctrl+Alt+P = sembunyi/tampil. */
 (() => {
   if (window.__aroPet) { window.__aroPet.destroy(); return; }
   let dead = false;
@@ -29,29 +29,53 @@
     Yogyakarta: [-7.7956, 110.3695, 7], Surabaya: [-7.2575, 112.7521, 7], Banyuwangi: [-8.2192, 114.3691, 7],
     Medan: [3.5952, 98.6722, 7], Palembang: [-2.9761, 104.7754, 7], Makassar: [-5.1477, 119.4327, 8], Denpasar: [-8.65, 115.2167, 8],
   };
+  const METHODS = { kemenag: [20, 18, 'Kemenag RI'], mwl: [18, 17, 'MWL'], egypt: [19.5, 17.5, 'Egypt'], isna: [15, 15, 'ISNA'] };
   const ANIMALS = ['🐱', '🐶', '🐹', '🐰', '🦊', '🐸', '🐧', '🐼'];
   const HATS = {
     '': 'Tanpa', '🎀': '🎀 Pita', '🧢': '🧢 Baseball', '🎓': '🎓 Toga', '🎩': '🎩 Topi', '👑': '👑 Mahkota',
     '🌙': '🌙 Bulan', '🇮🇩': '🇮🇩 Merah Putih', '🎃': '🎃 Halloween', '🎆': '🎆 Tahun Baru',
+    '🕶️': '🕶️ Kacamata', '🎧': '🎧 Headset', '🤠': '🤠 Koboi', '🧙': '🧙 Penyihir',
   };
   const HAT_LV = { '🎀': 1, '🧢': 2, '🎓': 3, '🎩': 4, '👑': 5 };
+  const EYES = [['#22d3ee', 'Cyan'], ['#4ade80', 'Hijau'], ['#f472b6', 'Pink'], ['#facc15', 'Kuning'], ['#fb923c', 'Oranye']];
+  /* toko: [jenis, nilai, nama, harga] */
+  const SHOP = [
+    ['hat', '🕶️', 'Kacamata', 40], ['hat', '🎧', 'Headset', 60], ['hat', '🤠', 'Koboi', 80], ['hat', '🧙', 'Penyihir', 120],
+    ['eye', '#a78bfa', 'Mata ungu', 30], ['eye', '#f87171', 'Mata merah', 30], ['eye', '#f8fafc', 'Mata putih', 30],
+    ['decor', '🪴', 'Tanaman', 50], ['decor', '🧸', 'Boneka', 70], ['decor', '🏮', 'Lampion', 90],
+  ];
   const DEF = {
     name: 'Mimi', owner: 'Aro', animal: '🐱', hat: '', buddy: '', size: 52, sound: false,
     sitMin: 45, waterMin: 90, eyeMin: 20, idleMin: 5, snoozeMin: 10, waterGoal: 8, notif: false,
-    city: 'Jakarta', before: 10, endTime: '17:00', sysIdle: false, desk: false, eye: '#22d3ee',
-    quietFrom: '', quietTo: '', eco: true,
+    city: 'Jakarta', lat: 0, lon: 0, tz: 7, method: 'kemenag', ihti: 2,
+    before: 10, endTime: '17:00', sysIdle: false, desk: false, eye: '#22d3ee',
+    quietFrom: '', quietTo: '', eco: true, theme: 'auto', rem: [],
+    block: 'bank\nklikbca\nmandiri\nbri.co.id\nbni.co.id\ncimb\nbtn.co.id\nmeet.google.com\nteams.microsoft.com\nzoom.us',
   };
   const C = Object.assign({}, DEF);
   try { Object.assign(C, JSON.parse(rawC || '{}')); } catch (e) {}
+  if (!Array.isArray(C.rem)) C.rem = [];
   const saveC = () => wr('aroPet.cfg', JSON.stringify(C));
 
-  const st = { date: '', water: 0, kicks: 0, fed: 0, best: 0, greet: {}, hunger: 30, happy: 70, t: Date.now(), xp: 0, ach: {}, seen: {}, dndUntil: 0, streak: 0, goalDay: '', hist: {}, quest: null, px: null };
+  /* situs terlarang (hanya mode ekstensi) */
+  const blocked = () => {
+    const h = location.hostname.toLowerCase();
+    return String(C.block || '').split(/[\n,]/).map(s => s.trim().toLowerCase()).filter(Boolean).some(p => h.includes(p));
+  };
+  if (EXT && blocked()) { delete window.__aroPet; return; }
+
+  const st = { date: '', water: 0, kicks: 0, fed: 0, best: 0, greet: {}, hunger: 30, happy: 70, t: Date.now(), xp: 0, ach: {}, seen: {}, dndUntil: 0, streak: 0, goalDay: '', hist: {}, quest: null, px: null, coins: 0, own: {} };
   try { Object.assign(st, JSON.parse(rawS || '{}')); } catch (e) {}
   const saveS = () => { st.t = Date.now(); if (typeof W === 'number' && W > 0) st.px = x / W; wr('aroPet.st', JSON.stringify(st)); };
   { const s = Math.min(8 * 3600, Math.max(0, (Date.now() - st.t) / 1000));
     st.hunger = clamp(st.hunger + s * .0093, 0, 100); st.happy = clamp(st.happy - s * .01, 0, 100); }
   st.g = Object.assign({ rps: [0, 0, 0], ttt: [0, 0, 0], reflex: 0, gaze: 0, mem: 0, whack: 0, catch: 0 }, st.g || {});
   st.tot = Object.assign({ click: 0, kick: 0, fed: 0, purr: 0, guide: 0, win: 0, water: 0, trick: 0, bestCombo: 0 }, st.tot || {});
+  if (!st.own || typeof st.own !== 'object') st.own = {};
+  if (!Number.isFinite(st.coins)) st.coins = 0;
+  const owns = (k, v) => !!st.own[k + v];
+  const SHOP_HATS = new Set(SHOP.filter(s => s[0] === 'hat').map(s => s[1]));
+  const hatLocked = v => (HAT_LV[v] || 0) > lvl() || (SHOP_HATS.has(v) && !owns('hat', v));
   const lvl = () => Math.floor(Math.sqrt(st.xp / 20)) + 1, lvXp = L => 20 * (L - 1) * (L - 1);
   const evoOf = L => L >= 15 ? 3 : L >= 8 ? 2 : L >= 4 ? 1 : 0, evo = () => evoOf(lvl());
   const EVO_SCALE = [1, 1.06, 1.12, 1.18];
@@ -61,7 +85,7 @@
   const rad = Math.PI / 180, sin = a => Math.sin(a * rad), cos = a => Math.cos(a * rad),
     tan = a => Math.tan(a * rad), acos = x => Math.acos(x) / rad,
     atan2 = (a, b) => Math.atan2(a, b) / rad, fix = (a, b) => a - b * Math.floor(a / b);
-  function prayer(y, m, d, lat, lon, tz) {
+  function prayer(y, m, d, lat, lon, tz, fa, ia, ih) {
     const D = Date.UTC(y, m - 1, d, 12) / 864e5 + 2440587.5 - 2451545;
     const g = fix(357.529 + .98560028 * D, 360), q = fix(280.459 + .98564736 * D, 360);
     const L = fix(q + 1.915 * sin(g) + .02 * sin(2 * g), 360), e = 23.439 - 3.6e-7 * D;
@@ -71,16 +95,18 @@
     const noon = 12 + tz - lon / 15 - eqt;
     const ang = a => acos((-sin(a) - sin(decl) * sin(lat)) / (cos(decl) * cos(lat))) / 15;
     const asrA = Math.atan(1 / (1 + tan(Math.abs(lat - decl)))) / rad;
-    const h = { Subuh: noon - ang(20), Dzuhur: noon, Ashar: noon + ang(-asrA), Maghrib: noon + ang(.833), Isya: noon + ang(18) };
+    const h = { Subuh: noon - ang(fa), Dzuhur: noon, Ashar: noon + ang(-asrA), Maghrib: noon + ang(.833), Isya: noon + ang(ia) };
     const out = {};
-    for (const k in h) out[k] = new Date(Date.UTC(y, m - 1, d) + (h[k] + 2 / 60 - tz) * 36e5);
+    for (const k in h) out[k] = new Date(Date.UTC(y, m - 1, d) + (h[k] + ih / 60 - tz) * 36e5);
     return out;
   }
-  const loc = () => CITIES[C.city] || CITIES.Jakarta;
-  const tzName = () => loc()[2] === 8 ? 'Asia/Makassar' : 'Asia/Jakarta';
+  const loc = () => C.city === 'Kustom' && (+C.lat || +C.lon) ? [+C.lat, +C.lon, clamp(+C.tz || 7, 7, 9)] : (CITIES[C.city] || CITIES.Jakarta);
+  const tzName = () => { const z = loc()[2]; return z === 9 ? 'Asia/Jayapura' : z === 8 ? 'Asia/Makassar' : 'Asia/Jakarta'; };
+  const method = () => METHODS[C.method] || METHODS.kemenag;
+  const ihti = () => Number.isFinite(+C.ihti) ? +C.ihti : 2;
   const ymd = () => new Intl.DateTimeFormat('en-CA', { timeZone: tzName(), year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()).split('-').map(Number);
   const hhmm = d => d.toLocaleTimeString('en-GB', { timeZone: tzName(), hour: '2-digit', minute: '2-digit' });
-  const dayTimes = (y, m, d) => { const l = loc(); return prayer(y, m, d, l[0], l[1], l[2]); };
+  const dayTimes = (y, m, d) => { const l = loc(), M = method(); return prayer(y, m, d, l[0], l[1], l[2], M[0], M[1], ihti()); };
   const nowMin = () => { const p = new Intl.DateTimeFormat('en-GB', { timeZone: tzName(), hourCycle: 'h23', hour: 'numeric', minute: 'numeric' }).formatToParts(new Date()); return +p.find(x => x.type === 'hour').value * 60 + +p.find(x => x.type === 'minute').value; };
   const isWeekday = () => { const [y, m, d] = ymd(), w = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); return w > 0 && w < 6; };
   function nextPrayer(n) {
@@ -91,6 +117,25 @@
   const dayKey = off => { const [y, m, d] = ymd(), t = new Date(Date.UTC(y, m - 1, d + off)); return [t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate()].join('-'); };
   const hist = () => { const k = dayKey(0); return st.hist[k] || (st.hist[k] = { w: 0, g: 0, a: 0 }); };
   const streak = () => st.goalDay === dayKey(0) || st.goalDay === dayKey(-1) ? st.streak : 0;
+
+  /* ---------- tema (ikut mode gelap situs / sistem) ---------- */
+  const LIGHT = { bg: '#fff', fg: '#222', mut: '#667', btn: '#eef2ff', bar: '#e2e8f0', cell: '#f1f5f9' };
+  const DARK = { bg: '#1e293b', fg: '#f1f5f9', mut: '#94a3b8', btn: '#334155', bar: '#334155', cell: '#0f172a' };
+  let TH = LIGHT;
+  function isDark() {
+    if (C.theme === 'dark') return true;
+    if (C.theme === 'light') return false;
+    try {
+      const m = getComputedStyle(doc.body || root).backgroundColor.match(/[\d.]+/g);
+      if (m && m.length >= 3 && !(m.length === 4 && +m[3] === 0)) return (.299 * m[0] + .587 * m[1] + .114 * m[2]) < 128;
+    } catch (e) {}
+    try { return matchMedia('(prefers-color-scheme: dark)').matches; } catch (e) { return false; }
+  }
+  function theme() {
+    TH = isDark() ? DARK : LIGHT;
+    bub.style.background = TH.bg; bub.style.color = TH.fg;
+    panel.style.background = TH.bg; panel.style.color = TH.fg; panel.style.colorScheme = TH === DARK ? 'dark' : 'light';
+  }
 
   /* ---------- elemen ---------- */
   const baseS = () => clamp(+C.size || 52, 36, 96) * (C.desk ? 1.6 : 1) * EVO_SCALE[evo()];
@@ -106,6 +151,13 @@
   bub.addEventListener('pointerdown', e => e.stopPropagation());
   el.append(face, acc, badge, bub);
   root.appendChild(el);
+  const decor = doc.createElement('div');
+  decor.style.cssText = `position:fixed;left:8px;bottom:0;z-index:${TOP - 2};pointer-events:none;display:none;gap:6px;font:26px/1 ${FONT}`;
+  root.appendChild(decor);
+  function applyDecor() {
+    decor.textContent = SHOP.filter(s => s[0] === 'decor' && owns('decor', s[1])).map(s => s[1]).join(' ');
+    decor.style.display = vis && !auto && decor.textContent ? 'flex' : 'none';
+  }
   function applySize() {
     el.style.width = el.style.height = S + 'px';
     el.style.font = `${Math.round(S * .85)}px/${S}px ${FONT}`;
@@ -135,6 +187,8 @@
   let item = null, bud = null, wx = null, pomo = null, sysIdle = null, idleAbort = null;
   let dnd = false, night = false, guide = null, breathK = 1, trick = null, peek = null;
   let strokeAmt = 0, purrUntil = 0, lastHeart = 0;
+  let lead = !EXT, auto = false;
+  const TID = Math.random().toString(36).slice(2), LK = 'aroPet.lead';
   const missed = [], toasts = [];
   /* desk buddy */
   const cv = doc.createElement('canvas'); cv.style.cssText = 'display:block;pointer-events:none';
@@ -164,6 +218,7 @@
     bub.style.left = clamp(x + (S - bw) / 2, 4, Math.max(4, W - bw - 4)) - x + 'px';
   }
   function card(text, btns, ms) {
+    theme();
     bub.textContent = '';
     const t = doc.createElement('div'); t.textContent = text; bub.appendChild(t);
     if (btns) {
@@ -195,6 +250,7 @@
   }
   function pump() {
     if (nact) return;
+    if (auto) return;
     const n = Date.now();
     while (nq.length && !nq[0].urgent && n - nq[0].t > 6e5) nq.shift();
     if (!nq.length) return;
@@ -225,7 +281,7 @@
     tBlink = setInterval(() => { doc.title = (on = !on) ? '🔔 ' + C.name + ' memanggil' : origTitle; }, 1000);
   }
   const stopBlink = () => { if (!tBlink) return; clearInterval(tBlink); tBlink = null; doc.title = origTitle; };
-  const onVisible = () => { if (!doc.hidden) stopBlink(); };
+  const onVisible = () => { if (!doc.hidden) { stopBlink(); leadSync(true); } };
   doc.addEventListener('visibilitychange', onVisible);
   function beep() {
     if (!C.sound) return;
@@ -236,13 +292,51 @@
       o.start(); o.stop(a.currentTime + .6);
     } catch (e) {}
   }
-  function toggleVis() {
-    vis = !vis; const d = vis ? '' : 'none';
+  function applyVis() {
+    const d = vis && !auto ? '' : 'none';
     el.style.display = d; if (item) item.el.style.display = d; if (bud) bud.el.style.display = d;
-    if (!vis) { panel.style.display = 'none'; }
+    if (d) panel.style.display = 'none';
+    applyDecor();
   }
+  function toggleVis() { vis = !vis; applyVis(); }
+  const chkFs = () => {
+    let f = false;
+    try { f = !!doc.fullscreenElement || (innerWidth >= screen.width && innerHeight >= screen.height); } catch (e) {}
+    if (f === auto) return;
+    auto = f; applyVis(); updDnd(); if (!auto) pump();
+  };
+  doc.addEventListener('fullscreenchange', chkFs);
 
-  /* ---------- XP, level, prestasi, quest ---------- */
+  /* ---------- tab pemimpin & sinkron antar tab (ekstensi) ---------- */
+  function leadSync(claim) {
+    if (!EXT) return;
+    try {
+      chrome.storage.local.get(LK, r => { try {
+        const rec = (r && r[LK]) || {}, n = Date.now(), stale = !rec.id || n - rec.t > 30000;
+        const adopt = () => { Object.assign(A, rec.A || {}); pomo = rec.pomo || null; Object.assign(fired, rec.F || {}); };
+        if (rec.id === TID || stale || claim) {
+          if (rec.id !== TID) adopt();
+          lead = true; chrome.storage.local.set({ [LK]: { id: TID, t: n, A, pomo, F: fired } });
+        } else { lead = false; adopt(); }
+      } catch (e) {} });
+    } catch (e) {}
+  }
+  function leadPush() { if (!EXT) return; lead = true; try { chrome.storage.local.set({ [LK]: { id: TID, t: Date.now(), A, pomo, F: fired } }); } catch (e) {} }
+  function leadRelease() { if (EXT && lead) try { chrome.storage.local.remove(LK); } catch (e) {} }
+  const ctxOk = () => { try { return !!chrome.runtime.id; } catch (e) { return false; } };
+  const onStore = (ch, area) => {
+    if (area !== 'local') return;
+    try {
+      if (ch['aroPet.st'] && ch['aroPet.st'].newValue) { const d = JSON.parse(ch['aroPet.st'].newValue); delete d.px; Object.assign(st, d); applyDecor(); }
+      if (ch['aroPet.cfg'] && ch['aroPet.cfg'].newValue) { Object.assign(C, JSON.parse(ch['aroPet.cfg'].newValue)); if (!Array.isArray(C.rem)) C.rem = []; applyCfg(); }
+    } catch (e) {}
+  };
+  if (EXT) try { chrome.storage.onChanged.addListener(onStore); } catch (e) {}
+  const leadIv = setInterval(() => leadSync(false), 5000);
+  const onFocus = () => { if (!doc.hidden) leadSync(true); };
+  addEventListener('focus', onFocus); addEventListener('pagehide', leadRelease);
+
+  /* ---------- XP, level, koin, prestasi, quest ---------- */
   const ACH = [
     ['kenyal', '🫧 Si Kenyal', 'Klik 100x', () => st.tot.click >= 100, () => `${st.tot.click}/100`],
     ['striker', '⚽ Striker', 'Tendang bola 50x', () => st.tot.kick >= 50, () => `${st.tot.kick}/50`],
@@ -259,6 +353,7 @@
     ['water', 'Minum {n} gelas', [4, 6, 8]], ['kick', 'Tendang bola {n}x', [10, 20]], ['fed', 'Beri makan {n}x', [2, 3]],
     ['purr', 'Elus {n}x', [2, 3]], ['guide', 'Selesaikan {n} sesi napas/peregangan', [1, 2]], ['click', 'Klik hewan {n}x', [30, 50]], ['trick', 'Lihat {n} trik', [3, 5]],
   ];
+  const COIN = { water: 1, guide: 3, win: 3 };
   function ensureQuest() {
     const d = dayKey(0); if (st.quest && st.quest.date === d) return;
     const pool = QPOOL.slice().sort(() => Math.random() - .5).slice(0, 3);
@@ -275,16 +370,18 @@
   }
   function checkAch() {
     for (const [id, title, , test] of ACH) {
-      if (!st.ach[id] && test()) { st.ach[id] = 1; const b = lvl(); st.xp += 25; toast('🏆 Prestasi: ' + title + ' (+25 XP)'); if (lvl() > b) levelUp(lvl()); }
+      if (!st.ach[id] && test()) { st.ach[id] = 1; const b = lvl(); st.xp += 25; st.coins += 10; toast('🏆 Prestasi: ' + title + ' (+25 XP, +10 🪙)'); if (lvl() > b) levelUp(lvl()); }
     }
     if (st.quest) for (const q of st.quest.list) {
-      if (!q.done && (st.tot[q.k] || 0) - q.base >= q.need) { q.done = 1; const b = lvl(); st.xp += 15; toast('📜 Quest selesai: ' + q.text + ' (+15 XP)'); if (lvl() > b) levelUp(lvl()); }
+      if (!q.done && (st.tot[q.k] || 0) - q.base >= q.need) { q.done = 1; const b = lvl(); st.xp += 15; st.coins += 5; toast('📜 Quest selesai: ' + q.text + ' (+15 XP, +5 🪙)'); if (lvl() > b) levelUp(lvl()); }
     }
   }
   function gain(n, key) {
-    const b = lvl(); st.xp += n; if (key) st.tot[key] = (st.tot[key] || 0) + 1;
+    const b = lvl(); st.xp += n;
+    if (key) { st.tot[key] = (st.tot[key] || 0) + 1; if (COIN[key]) st.coins += COIN[key]; }
     if (lvl() > b) levelUp(lvl());
     checkAch();
+    const t = Date.now(); if (t - lastSave > 4000) { lastSave = t; saveS(); }
   }
   function drink() {
     st.water++; hist().w++; gain(2, 'water');
@@ -293,8 +390,8 @@
   }
   function goalHit() {
     const t = dayKey(0); if (st.goalDay === t) return;
-    st.streak = st.goalDay === dayKey(-1) ? st.streak + 1 : 1; st.goalDay = t;
-    toast(`🎯 Target minum tercapai! Streak ${st.streak} hari 🔥 (+10 XP)`); gain(10); setEmo('love', 2.5);
+    st.streak = st.goalDay === dayKey(-1) ? st.streak + 1 : 1; st.goalDay = t; st.coins += 10;
+    toast(`🎯 Target minum tercapai! Streak ${st.streak} hari 🔥 (+10 XP, +10 🪙)`); gain(10); setEmo('love', 2.5);
   }
 
   /* ---------- efek ---------- */
@@ -450,7 +547,7 @@
     const s = Math.round(S * .6), e = doc.createElement('div');
     e.textContent = emoji;
     e.style.cssText = `position:fixed;left:0;top:0;z-index:${TOP - 1};width:${s}px;height:${s}px;font:${Math.round(s * .85)}px/${s}px ${FONT};text-align:center;cursor:grab;user-select:none;-webkit-user-select:none;touch-action:none`;
-    if (!vis) e.style.display = 'none';
+    if (!vis || auto) e.style.display = 'none';
     root.appendChild(e);
     item = { k, el: e, s, x: rnd(W * .15, W * .85 - s), y: 0, vx: 0, vy: 0, drag: false, cool: 0 };
     drag(e, {
@@ -496,7 +593,7 @@
     const s = Math.round(S * .62), e = doc.createElement('div');
     e.textContent = C.buddy;
     e.style.cssText = `position:fixed;left:0;top:0;z-index:${TOP - 1};width:${s}px;height:${s}px;font:${Math.round(s * .85)}px/${s}px ${FONT};text-align:center;cursor:pointer;user-select:none;-webkit-user-select:none`;
-    if (!vis) e.style.display = 'none';
+    if (!vis || auto) e.style.display = 'none';
     e.addEventListener('pointerdown', ev => { ev.stopPropagation(); if (bud) { bud.vy = -520; fx('❤️', ev.clientX, ev.clientY); } });
     root.appendChild(e);
     bud = { el: e, s, x: clamp(x - S * 1.3, 0, W - s), y: H - s, vy: 0, dir: 1 };
@@ -608,7 +705,7 @@
   }
 
   /* ---------- loop ---------- */
-  function tick(t) {
+  function tick0(t) {
     if (C.eco && !hold && !guide) {
       const quiet = Date.now() - Math.max(lastMove, lastAct) > 30000, gap = quiet ? (mode === 'sleep' ? 100 : 33) : 0;
       if (gap && t - last < gap - 2) { raf = requestAnimationFrame(tick); return; }
@@ -695,17 +792,20 @@
     if (item) item.el.style.transform = `translate(${item.x}px,${item.y}px)`;
     raf = requestAnimationFrame(tick);
   }
+  /* satu error tidak boleh menghentikan loop */
+  function tick(t) { try { tick0(t); } catch (e) { setTimeout(() => { raf = requestAnimationFrame(tick); }, 200); } }
 
   /* ---------- panel ---------- */
   const closePanel = () => { gameTok++; panel.style.display = 'none'; panel.textContent = ''; };
   function openPanel(title, build) {
+    theme();
     panel.textContent = ''; panel.setAttribute('aria-label', title);
     const h = doc.createElement('div'); h.textContent = title; h.style.cssText = 'font-weight:700;margin-bottom:8px;font-size:14px';
     panel.appendChild(h); build(panel); panel.style.display = 'block';
   }
   function btn(label, fn, bg) {
     const b = doc.createElement('button'); b.textContent = label;
-    b.style.cssText = `border:0;border-radius:8px;padding:6px 8px;background:${bg || '#eef2ff'};color:${bg ? '#fff' : '#222'};font:13px ${FONT};cursor:pointer;flex:1 1 40%`;
+    b.style.cssText = `border:0;border-radius:8px;padding:6px 8px;background:${bg || TH.btn};color:${bg ? '#fff' : TH.fg};font:13px ${FONT};cursor:pointer;flex:1 1 40%`;
     b.onclick = e => { e.stopPropagation(); fn(b); };
     return b;
   }
@@ -713,15 +813,15 @@
     const g = doc.createElement('div'); g.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px';
     items.forEach(([l, f, bg]) => g.appendChild(btn(l, b => { f(b); }, bg))); parent.appendChild(g);
   }
-  const sec = (p, t) => { const d = doc.createElement('div'); d.textContent = t; d.style.cssText = 'font-size:11px;color:#667;margin:8px 0 4px;text-transform:uppercase;letter-spacing:.04em'; p.appendChild(d); };
+  const sec = (p, t) => { const d = doc.createElement('div'); d.textContent = t; d.style.cssText = `font-size:11px;color:${TH.mut};margin:8px 0 4px;text-transform:uppercase;letter-spacing:.04em`; p.appendChild(d); };
   const act = f => () => { closePanel(); f(); };
   function bar(p, pc, col) {
-    const b = doc.createElement('div'); b.style.cssText = 'height:8px;background:#e2e8f0;border-radius:4px;margin-bottom:8px;overflow:hidden';
+    const b = doc.createElement('div'); b.style.cssText = `height:8px;background:${TH.bar};border-radius:4px;margin-bottom:8px;overflow:hidden`;
     const f = doc.createElement('div'); f.style.cssText = `height:100%;width:${Math.round(clamp(pc, 0, 1) * 100)}%;background:${col || '#2563eb'}`; b.appendChild(f); p.appendChild(b);
   }
   function openMenu() {
     gameTok++;
-    openPanel(`${C.name} ${'⭐'.repeat(evo())} ${moodTxt()} · Lv ${lvl()}`, p => {
+    openPanel(`${C.name} ${'⭐'.repeat(evo())} ${moodTxt()} · Lv ${lvl()} · 🪙${st.coins}`, p => {
       sec(p, 'Rawat');
       grid(p, [
         ['🍖 Makan', act(() => spawnItem('food', '🍖'))], ['⚽ Bola', act(() => spawnItem('ball', '⚽'))],
@@ -741,9 +841,11 @@
       ]);
       sec(p, 'Lainnya');
       grid(p, [
-        ['🏆 Level', showLevel], ['📊 Statistik & Quest', showStats], ['🕌 Jadwal', showSchedule],
+        ['🏆 Level', showLevel], ['📊 Statistik & Quest', showStats], ['🛍 Toko', showShop], ['⏰ Pengingat', showRem],
+        ['📋 Ringkasan', showSum], ['🕌 Jadwal', showSchedule],
         ['⚙️ Pengaturan', openSettings], ['🔔 Tes', act(() => notify('Tes reminder ✅', [['Oke', () => {}]], 0, true))],
         [C.desk ? '🐱 Mode Emoji' : '👀 Mode Desk Buddy', act(() => { C.desk = !C.desk; saveC(); applyCfg(); say(C.desk ? 'Mode Desk Buddy 👀' : 'Mode Emoji 🐱', 2000); })],
+        ...(EXT ? [['🚫 Blokir situs ini', act(() => { C.block = (C.block ? C.block + '\n' : '') + location.hostname; saveC(); say('Diblokir. Berlaku setelah muat ulang', 3000); })]] : []),
         ['❌ Hilangkan', () => destroy(), '#dc2626'], ['Tutup', closePanel],
       ]);
     });
@@ -757,9 +859,9 @@
   }
   function showSchedule() {
     const [y0, m0, d0] = ymd(), T = dayTimes(y0, m0, d0);
-    openPanel('🕌 Jadwal sholat · ' + C.city, p => {
+    openPanel('🕌 Jadwal sholat · ' + (C.city === 'Kustom' ? 'Lokasi kustom' : C.city), p => {
       const t = doc.createElement('div'); t.style.cssText = 'white-space:pre-line;margin-bottom:8px';
-      t.textContent = Object.keys(T).map(k => k + '  ' + hhmm(T[k])).join('\n') + '\n\nPerkiraan hitungan Kemenag, cocokkan dengan jadwal resmi.';
+      t.textContent = Object.keys(T).map(k => k + '  ' + hhmm(T[k])).join('\n') + `\n\nMetode ${method()[2]}, ihtiyati +${ihti()} mnt. Cocokkan dengan jadwal resmi.`;
       p.appendChild(t); grid(p, [['Tutup', closePanel]]);
     });
   }
@@ -785,17 +887,90 @@
       gtext(p, '7 hari terakhir (gelas)');
       const ch = doc.createElement('div'); ch.style.cssText = 'display:flex;align-items:flex-end;gap:4px;height:70px;margin-bottom:8px';
       days.forEach(d => {
-        const c = doc.createElement('div'); c.style.cssText = 'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;font-size:10px;color:#667';
+        const c = doc.createElement('div'); c.style.cssText = `flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;font-size:10px;color:${TH.mut}`;
         const b = doc.createElement('div'); b.style.cssText = `width:100%;border-radius:3px;background:${d.h.w >= goal ? '#16a34a' : '#2563eb'};height:${Math.round(d.h.w / mx * 44) + 2}px`;
         const wd = new Date(Date.UTC(y0, m0 - 1, d0 + d.o)).getUTCDay();
         c.append(doc.createTextNode(d.h.w), b, doc.createTextNode(DN[wd])); ch.appendChild(c);
       });
       p.appendChild(ch);
       const sa = days.reduce((s, d) => s + d.h.a, 0), sg = days.reduce((s, d) => s + d.h.g, 0);
-      gtext(p, `Aktif ±${Math.round(sa / 6) / 10} jam · Sesi napas/peregangan: ${sg}`);
+      gtext(p, `Aktif ±${Math.round(sa / 6) / 10} jam (7 hari) · Sesi napas/peregangan: ${sg}`);
       sec(p, 'Quest hari ini');
       gtext(p, st.quest.list.map(q => (q.done ? '✅ ' : '⬜ ') + q.text + ` (${qProg(q)}/${q.need})`).join('\n'));
       grid(p, [['Tutup', closePanel]]);
+    });
+  }
+
+  /* ---------- ringkasan harian ---------- */
+  function summary() {
+    const h = hist(), q = st.quest ? st.quest.list : [], qd = q.filter(z => z.done).length;
+    return `📋 Ringkasan hari ini\n💧 ${st.water}/${C.waterGoal || 8} gelas · 🔥 streak ${streak()}\n⏱ Aktif ±${(h.a / 60).toFixed(1)} jam\n🧘 Sesi napas/peregangan: ${h.g}\n📜 Quest ${qd}/${q.length}\n🪙 Koin ${st.coins}`;
+  }
+  function showSum() { openPanel('📋 Ringkasan', p => { gtext(p, summary()); grid(p, [['Tutup', closePanel]]); }); }
+
+  /* ---------- toko ---------- */
+  function applyHatEye() { saveC(); applyCfg(); }
+  function showShop() {
+    openPanel('🛍 Toko · 🪙 ' + st.coins, p => {
+      gtext(p, 'Koin didapat dari minum, quest, target minum, game, dan prestasi.');
+      const kinds = { hat: 'Aksesori', eye: 'Warna mata (Desk Buddy)', decor: 'Dekorasi' };
+      for (const kind in kinds) {
+        sec(p, kinds[kind]);
+        SHOP.filter(s => s[0] === kind).forEach(([k, v, name, price]) => {
+          const r = doc.createElement('div'); r.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:8px;margin:4px 0';
+          const t = doc.createElement('span'); t.textContent = (k === 'eye' ? '👁 ' : v + ' ') + name; r.appendChild(t);
+          const own = owns(k, v), cur2 = k === 'hat' ? C.hat === v : k === 'eye' ? C.eye === v : false;
+          const b = btn(own ? (k === 'decor' ? 'Dimiliki ✅' : cur2 ? 'Dipakai ✅' : 'Pakai') : '🪙 ' + price, () => {
+            if (!own) {
+              if (st.coins < price) { b.textContent = 'Koin kurang'; return; }
+              st.coins -= price; st.own[k + v] = 1; saveS(); applyDecor();
+              say(`🛍 ${name} dibeli!`, 2000); showShop();
+            } else if (k !== 'decor') { C[k] = v; applyHatEye(); showShop(); }
+          });
+          b.style.cssText += ';flex:none;padding:4px 8px'; r.appendChild(b); p.appendChild(r);
+        });
+      }
+      grid(p, [['Tutup', closePanel]]);
+    });
+  }
+
+  /* ---------- pengingat kustom ---------- */
+  const REP = { daily: 'tiap hari', weekday: 'hari kerja', once: 'sekali' };
+  function showRem() {
+    openPanel('⏰ Pengingat kustom', p => {
+      const list = C.rem || [];
+      if (!list.length) gtext(p, 'Belum ada pengingat.');
+      list.forEach(r => {
+        const row = doc.createElement('div'); row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:6px;margin:4px 0';
+        const t = doc.createElement('span'); t.textContent = `${r.time} · ${r.text} (${REP[r.rep] || 'tiap hari'})`;
+        const d = btn('🗑', () => { C.rem = C.rem.filter(z => z.id !== r.id); saveC(); showRem(); });
+        d.style.cssText += ';flex:none;padding:3px 8px'; d.setAttribute('aria-label', 'Hapus pengingat');
+        row.append(t, d); p.appendChild(row);
+      });
+      sec(p, 'Tambah');
+      const ti = inp('text', '', { placeholder: 'minum obat' }); ti.style.cssText += ';width:100%;max-width:100%;box-sizing:border-box;margin-bottom:6px';
+      const tm = inp('time', '09:00'), rp = sel([['daily', 'Tiap hari'], ['weekday', 'Hari kerja'], ['once', 'Sekali']], 'daily');
+      const r2 = doc.createElement('div'); r2.style.cssText = 'display:flex;gap:6px;margin-bottom:6px'; r2.append(tm, rp);
+      p.append(ti, r2);
+      grid(p, [
+        ['Tambah', () => {
+          const text = ti.value.trim().slice(0, 80);
+          if (!text || hm(tm.value) < 0 || list.length >= 20) { ti.placeholder = 'Isi teks & jam (maks 20)'; return; }
+          C.rem = list.concat([{ id: Date.now().toString(36), text, time: tm.value, rep: rp.value }]); saveC(); showRem();
+        }, '#2563eb'],
+        ['Tutup', closePanel],
+      ]);
+    });
+  }
+  function checkRem(n) {
+    const mm = nowMin(), [y0, m0, d0] = ymd(), id = [y0, m0, d0].join('-');
+    (C.rem || []).slice().forEach(r => {
+      const t = hm(r.time); if (t < 0) return;
+      const k = 'r' + id + r.id;
+      if (mm >= t && mm < t + 10 && !fired[k] && (r.rep !== 'weekday' || isWeekday())) {
+        fired[k] = 1; notify('⏰ ' + r.text, [['Oke', () => {}]], 0, true);
+        if (r.rep === 'once') { C.rem = C.rem.filter(z => z.id !== r.id); saveC(); }
+      }
     });
   }
 
@@ -909,7 +1084,7 @@
         moves++; const [a, b] = open;
         if (cards[a] === cards[b]) {
           done.add(a); done.add(b); open = []; setEmo('happy', 1);
-          if (done.size === 12) { msg = `Selesai dalam ${moves} langkah! 🎉`; if (!st.g.mem || moves < st.g.mem) { st.g.mem = moves; msg += ' Rekor baru! 🏆'; } setEmo('love', 2.5); gain(8, 'win'); saveS(); }
+          if (done.size === 12) { msg = `Selesai dalam ${moves} langkah!`; if (!st.g.mem || moves < st.g.mem) { st.g.mem = moves; msg += ' Rekor baru! 🏆'; } setEmo('love', 2.5); gain(8, 'win'); saveS(); }
         } else { lock = true; setTimeout(() => { if (my !== gameTok) return; open = []; lock = false; draw(); }, 800); }
       }
       draw();
@@ -934,7 +1109,7 @@
     const end = () => {
       run = false; clearInterval(ti); clearTimeout(tm); show(-1);
       const rec = score > (st.g.whack || 0); if (rec) st.g.whack = score;
-      info.textContent = `Selesai! Skor ${score}` + (rec ? ' · rekor baru! 🏆' : ''); sbtn.textContent = 'Main lagi';
+      info.textContent = `Selesai! Skor ${score}` + (rec ? ' · rekor baru!' : ''); sbtn.textContent = 'Main lagi';
       if (score >= 15) gain(8, 'win'); setEmo(score >= 12 ? 'sad' : 'happy', 2); saveS();
     };
     const start = () => {
@@ -948,7 +1123,7 @@
     const my = ++gameTok, R = 6, K = 5, cells = []; let px = 2, lives = 3, score = 0, items = [], over = false, info;
     openPanel('🧺 Tangkap buah', p => {
       info = doc.createElement('div'); info.style.cssText = 'margin-bottom:6px'; p.appendChild(info);
-      const gd = doc.createElement('div'); gd.style.cssText = `display:grid;grid-template-columns:repeat(${K},1fr);gap:2px;margin-bottom:8px;background:#f1f5f9;border-radius:8px;padding:4px`;
+      const gd = doc.createElement('div'); gd.style.cssText = `display:grid;grid-template-columns:repeat(${K},1fr);gap:2px;margin-bottom:8px;background:${TH.cell};border-radius:8px;padding:4px`;
       for (let i = 0; i < R * K; i++) { const c = doc.createElement('div'); c.style.cssText = 'height:30px;line-height:30px;text-align:center;font-size:20px'; cells.push(c); gd.appendChild(c); }
       p.appendChild(gd); grid(p, [['⬅️', () => mv(-1)], ['➡️', () => mv(1)]]); grid(p, [['Ulang', gCatch]]); gfoot(p);
     });
@@ -987,10 +1162,16 @@
     opts.forEach(([v, t]) => { const o = doc.createElement('option'); o.value = v; o.textContent = t; s.appendChild(o); });
     s.value = val; return s;
   };
-  function exportCfg() {
+  function download(name, type, text) {
     const a = doc.createElement('a');
-    a.href = URL.createObjectURL(new Blob([JSON.stringify({ v: 4, cfg: C, st }, null, 1)], { type: 'application/json' }));
-    a.download = 'pet-backup.json'; root.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    a.href = URL.createObjectURL(new Blob([text], { type }));
+    a.download = name; root.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+  const exportCfg = () => download('pet-backup.json', 'application/json', JSON.stringify({ v: 4, cfg: C, st }, null, 1));
+  function exportCsv() {
+    const rows = ['tanggal,gelas,sesi_napas_peregangan,menit_aktif'];
+    Object.keys(st.hist).sort().forEach(k => { const h = st.hist[k]; rows.push([k, h.w, h.g, Math.round(h.a)].join(',')); });
+    download('pet-statistik.csv', 'text/csv', rows.join('\n'));
   }
   function importCfg() {
     const i = doc.createElement('input'); i.type = 'file'; i.accept = 'application/json,.json';
@@ -1000,7 +1181,8 @@
         try {
           const d = JSON.parse(r.result); if (!d || typeof d !== 'object' || !d.cfg || typeof d.cfg !== 'object') throw new Error('format salah');
           for (const k in DEF) if (k in d.cfg && typeof d.cfg[k] === typeof DEF[k]) C[k] = d.cfg[k];
-          if (d.st && typeof d.st === 'object') for (const k of ['water', 'kicks', 'fed', 'best', 'hunger', 'happy', 'xp', 'tot', 'ach', 'g', 'seen', 'streak', 'goalDay', 'hist', 'quest']) if (k in d.st && typeof d.st[k] === typeof st[k]) st[k] = d.st[k];
+          if (!Array.isArray(C.rem)) C.rem = [];
+          if (d.st && typeof d.st === 'object') for (const k of ['water', 'kicks', 'fed', 'best', 'hunger', 'happy', 'xp', 'tot', 'ach', 'g', 'seen', 'streak', 'goalDay', 'hist', 'quest', 'coins', 'own']) if (k in d.st && typeof d.st[k] === typeof st[k]) st[k] = d.st[k];
           st.g = Object.assign({ rps: [0, 0, 0], ttt: [0, 0, 0], reflex: 0, gaze: 0, mem: 0, whack: 0, catch: 0 }, st.g);
           st.tot = Object.assign({ click: 0, kick: 0, fed: 0, purr: 0, guide: 0, win: 0, water: 0, trick: 0, bestCombo: 0 }, st.tot);
           saveC(); saveS(); applyCfg(); closePanel(); say('Impor berhasil ✅', 2500);
@@ -1021,42 +1203,66 @@
       row('name', 'Nama hewan', inp('text', C.name));
       row('owner', 'Nama kamu', inp('text', C.owner));
       row('animal', 'Hewan', sel(ANIMALS.map(a => [a, a]), C.animal));
-      row('hat', 'Aksesori', sel(Object.entries(HATS).map(([v, t]) => [v, HAT_LV[v] > lvl() ? `🔒 ${t} (Lv ${HAT_LV[v]})` : t]), C.hat));
-      [...f.hat.options].forEach(o => { if (HAT_LV[o.value] > lvl() && o.value !== C.hat) o.disabled = true; });
+      row('hat', 'Aksesori', sel(Object.entries(HATS).map(([v, t]) => [v, hatLocked(v) ? `🔒 ${t}` + (HAT_LV[v] ? ` (Lv ${HAT_LV[v]})` : ' (toko)') : t]), C.hat));
+      [...f.hat.options].forEach(o => { if (hatLocked(o.value) && o.value !== C.hat) o.disabled = true; });
       row('desk', 'Mode Desk Buddy', inp('checkbox', C.desk));
-      row('eye', 'Warna mata', sel([['#22d3ee', 'Cyan'], ['#4ade80', 'Hijau'], ['#f472b6', 'Pink'], ['#facc15', 'Kuning'], ['#fb923c', 'Oranye']], C.eye));
+      const eyeOpts = EYES.concat(SHOP.filter(s => s[0] === 'eye').map(s => [s[1], owns('eye', s[1]) ? s[2] : '🔒 ' + s[2] + ' (toko)']));
+      row('eye', 'Warna mata', sel(eyeOpts, C.eye));
+      [...f.eye.options].forEach(o => { if (SHOP.some(s => s[0] === 'eye' && s[1] === o.value) && !owns('eye', o.value) && o.value !== C.eye) o.disabled = true; });
       row('buddy', 'Teman', sel([['', 'Tanpa']].concat(ANIMALS.map(a => [a, a])), C.buddy));
+      row('theme', 'Tema', sel([['auto', 'Otomatis (ikut situs)'], ['light', 'Terang'], ['dark', 'Gelap']], C.theme));
       row('size', 'Ukuran', inp('range', C.size, { min: 36, max: 96 }));
       row('sound', 'Suara', inp('checkbox', C.sound));
       row('eco', 'Hemat baterai', inp('checkbox', C.eco));
       row('notif', 'Notifikasi saat tab tersembunyi', inp('checkbox', C.notif));
+      const ta = doc.createElement('textarea'); ta.rows = 4; ta.value = C.block; ta.placeholder = 'bank\nmeet.google.com';
+      ta.style.cssText = 'width:140px;font:12px ' + FONT;
+      row('block', 'Situs terlarang (ekstensi, 1 per baris)', ta);
       sec(p, 'Reminder');
       row('sitMin', 'Duduk (mnt, 0=off)', inp('number', C.sitMin, { min: 0 }));
       row('waterMin', 'Minum (mnt, 0=off)', inp('number', C.waterMin, { min: 0 }));
       row('waterGoal', 'Target minum (gelas/hari)', inp('number', C.waterGoal, { min: 1 }));
       row('eyeMin', 'Istirahat mata (mnt)', inp('number', C.eyeMin, { min: 0 }));
-      row('city', 'Kota sholat', sel(Object.keys(CITIES).map(c => [c, c]), C.city));
       row('before', 'Sholat: ingatkan (mnt)', inp('number', C.before, { min: 0 }));
       row('endTime', 'Jam pulang (kosong=off)', inp('time', C.endTime));
       row('quietFrom', 'Jam tenang mulai', inp('time', C.quietFrom));
       row('quietTo', 'Jam tenang selesai', inp('time', C.quietTo));
-      const note = doc.createElement('div'); note.style.cssText = 'color:#666;font-size:12px;margin:6px 0';
-      note.textContent = 'Saat jam tenang atau "Diam", reminder ditahan dan dirangkum setelahnya. Sholat tetap tampil (tanpa bunyi). Di jendela mini, hitungan duduk memakai waktu berjalan kecuali idle sistem diaktifkan.';
+      sec(p, 'Waktu sholat');
+      row('city', 'Kota', sel(Object.keys(CITIES).map(c => [c, c]).concat([['Kustom', 'Kustom (koordinat)']]), C.city));
+      row('lat', 'Lintang (kustom)', inp('number', C.lat, { step: 'any' }));
+      row('lon', 'Bujur (kustom)', inp('number', C.lon, { step: 'any' }));
+      row('tz', 'Zona kustom (7=WIB 8=WITA 9=WIT)', inp('number', C.tz, { min: 7, max: 9 }));
+      row('method', 'Metode', sel(Object.entries(METHODS).map(([k, v]) => [k, v[2]]), C.method));
+      row('ihti', 'Ihtiyati (menit)', inp('number', ihti(), { min: 0, max: 15, step: 'any' }));
+      grid(p, [['📍 Pakai lokasi saya', b => {
+        if (!navigator.geolocation) { b.textContent = 'Tidak didukung'; return; }
+        b.textContent = '...';
+        navigator.geolocation.getCurrentPosition(pos => {
+          const la = +pos.coords.latitude.toFixed(4), lo = +pos.coords.longitude.toFixed(4);
+          f.lat.value = la; f.lon.value = lo; f.tz.value = lo < 115 ? 7 : lo < 129 ? 8 : 9; f.city.value = 'Kustom';
+          b.textContent = '✅ Terisi, tekan Simpan';
+        }, er => { b.textContent = 'Gagal: ' + (er && er.message || 'ditolak'); }, { timeout: 10000 });
+      }]]);
+      const note = doc.createElement('div'); note.style.cssText = `color:${TH.mut};font-size:12px;margin:6px 0`;
+      note.textContent = 'Saat jam tenang atau "Diam", reminder ditahan dan dirangkum setelahnya. Sholat dan pengingat kustom tetap tampil (tanpa bunyi). Di jendela mini, hitungan duduk memakai waktu berjalan kecuali idle sistem diaktifkan.';
       p.appendChild(note);
       grid(p, [[sysIdle !== null ? '🖥️ Idle sistem: ON' : '🖥️ Aktifkan idle sistem', async b => { b.textContent = '...'; b.textContent = await enableIdle(); }]]);
       sec(p, 'Cadangan');
-      grid(p, [['⬇️ Ekspor', exportCfg], ['⬆️ Impor', importCfg]]);
+      grid(p, [['Ekspor', exportCfg], ['Impor', importCfg], ['Statistik CSV', exportCsv]]);
       grid(p, [
         ['Simpan', () => {
           C.name = f.name.value.trim() || DEF.name; C.owner = f.owner.value.trim();
-          C.animal = f.animal.value; C.hat = f.hat.value; C.buddy = f.buddy.value;
+          C.animal = f.animal.value; C.hat = f.hat.value; C.buddy = f.buddy.value; C.theme = f.theme.value;
           C.desk = f.desk.checked; C.eye = f.eye.value; C.eco = f.eco.checked; C.notif = f.notif.checked;
           if (C.notif && window.Notification && Notification.permission === 'default') { try { Notification.requestPermission(); } catch (e) {} }
-          C.size = clamp(+f.size.value || 52, 36, 96); C.sound = f.sound.checked;
+          C.size = clamp(+f.size.value || 52, 36, 96); C.sound = f.sound.checked; C.block = f.block.value;
           ['sitMin', 'waterMin', 'eyeMin', 'before'].forEach(k => { C[k] = Math.max(0, +f[k].value || 0); });
           C.waterGoal = Math.max(1, +f.waterGoal.value || 8);
-          C.city = f.city.value; C.endTime = f.endTime.value; C.quietFrom = f.quietFrom.value; C.quietTo = f.quietTo.value;
-          saveC(); applyCfg(); updDnd(); closePanel(); say('Tersimpan ✅', 1500);
+          C.city = f.city.value; C.lat = +f.lat.value || 0; C.lon = +f.lon.value || 0; C.tz = clamp(+f.tz.value || 7, 7, 9);
+          C.method = f.method.value; C.ihti = clamp(+f.ihti.value || 0, 0, 15);
+          C.endTime = f.endTime.value; C.quietFrom = f.quietFrom.value; C.quietTo = f.quietTo.value;
+          for (const k in fired) delete fired[k];
+          saveC(); applyCfg(); updDnd(); closePanel(); say('Tersimpan', 1500);
         }, '#2563eb'],
         ['Batal', closePanel],
       ]);
@@ -1064,31 +1270,31 @@
   }
   function applyCfg() {
     S = baseS(); animal = C.animal; applySize();
-    x = clamp(x, 0, W - S); y = clamp(y, 0, H - S); mkBuddy();
+    x = clamp(x, 0, W - S); y = clamp(y, 0, H - S); mkBuddy(); applyDecor();
   }
 
   /* ---------- status, mood, pomodoro, jangan ganggu ---------- */
-  const moodTxt = () => st.hunger > 70 ? 'lapar 🍖' : st.happy < 30 ? 'bosan 😴' : st.happy > 70 ? 'senang 😊' : 'santai 🙂';
+  const moodTxt = () => st.hunger > 70 ? 'lapar' : st.happy < 30 ? 'bosan' : st.happy > 70 ? 'senang ' : 'santai';
   function status() {
     const n = Date.now(), np = nextPrayer(n), m = Math.max(0, Math.round((np[1] - n) / 6e4));
     const left = m >= 60 ? Math.floor(m / 60) + ' j ' + (m % 60) + ' mnt' : m + ' mnt';
-    let s = `${C.name} ${'⭐'.repeat(evo())} · Lv ${lvl()} · ${moodTxt()}\n❤ ${Math.round(st.happy)}%  🍖 ${Math.round(st.hunger)}%\n🕌 ${np[0]} ${left} lagi (${hhmm(np[1])})\n💧 ${st.water}/${C.waterGoal || 8}  🔥 ${streak()}  ⚽ ${st.kicks}  💥 ${st.best}`;
+    let s = `${C.name} ${'⭐'.repeat(evo())} · Lv ${lvl()} · ${moodTxt()}\n❤ ${Math.round(st.happy)}%  🍖 ${Math.round(st.hunger)}%\n🕌 ${np[0]} ${left} lagi (${hhmm(np[1])})\n💧 ${st.water}/${C.waterGoal || 8}  🔥 ${streak()}  🪙 ${st.coins}  ⚽ ${st.kicks}  💥 ${st.best}`;
     if (pomo) s += `\n🍅 ${pomo.phase === 'focus' ? 'Fokus' : 'Istirahat'} ${Math.ceil((pomo.end - n) / 6e4)} mnt`;
     if (dnd) s += '\n🔕 Mode diam' + (missed.length ? ` (${missed.length} tertahan)` : '');
     return s;
   }
   function togglePomo() {
-    if (pomo) { pomo = null; say('Pomodoro berhenti', 2000); return; }
-    pomo = { phase: 'focus', end: Date.now() + 25 * 6e4, cycle: 0 }; say('🍅 Fokus 25 menit dimulai', 3000);
+    if (pomo) { pomo = null; say('Pomodoro berhenti', 2000); leadPush(); return; }
+    pomo = { phase: 'focus', end: Date.now() + 25 * 6e4, cycle: 0 }; say('Fokus 25 menit dimulai', 3000); leadPush();
   }
   function pomoStep(n) {
     if (!pomo || n < pomo.end) return;
     if (pomo.phase === 'focus') {
       pomo.cycle++; const m = pomo.cycle % 4 === 0 ? 15 : 5; pomo.phase = 'break'; pomo.end = n + m * 6e4;
-      notify(`🍅 Fokus selesai! Istirahat ${m} menit ☕\nBerdiri, minum, regangkan badan.`, [['Oke', () => {}]]);
+      notify(`Fokus selesai! Istirahat ${m} menit\nBerdiri, minum, regangkan badan.`, [['Oke', () => {}]]);
     } else {
       pomo.phase = 'focus'; pomo.end = n + 25 * 6e4;
-      notify('🍅 Istirahat selesai. Yuk fokus 25 menit lagi 💪', [['Mulai', () => {}]]);
+      notify('Istirahat selesai. Yuk fokus 25 menit lagi', [['Mulai', () => {}]]);
     }
   }
   function inQuiet() {
@@ -1098,12 +1304,12 @@
   function endDnd() {
     if (!missed.length) return;
     const list = missed.splice(0).slice(0, 4).map(s => '• ' + s).join('\n');
-    toast('🔔 Reminder yang tertahan:\n' + list);
+    toast('Reminder yang tertahan:\n' + list);
   }
-  function updDnd() { const was = dnd; dnd = st.dndUntil > Date.now() || inQuiet(); if (was && !dnd) endDnd(); }
+  function updDnd() { const was = dnd; dnd = st.dndUntil > Date.now() || inQuiet() || auto; if (was && !dnd) endDnd(); }
   function toggleDnd() {
-    if (dnd) { st.dndUntil = 0; updDnd(); say(dnd ? '🔕 Jam tenang masih aktif' : '🔔 Reminder aktif lagi', 2500); }
-    else { st.dndUntil = Date.now() + 36e5; saveS(); updDnd(); say('🔕 Diam 1 jam. Reminder ditahan', 2500); }
+    if (dnd) { st.dndUntil = 0; updDnd(); say(dnd ? 'Jam tenang masih aktif' : 'Reminder aktif lagi', 2500); }
+    else { st.dndUntil = Date.now() + 36e5; saveS(); updDnd(); say('Diam 1 jam. Reminder ditahan', 2500); }
     saveS();
   }
 
@@ -1134,39 +1340,44 @@
     if (e.key === 'Escape' && panel.style.display === 'block') { closePanel(); return; }
     if ((e.key || '').length === 1 && !panel.contains(e.target)) {
       const n = Date.now(); kt.push(n); while (kt.length && n - kt[0] > 5000) kt.shift();
-      if (kt.length >= 40 && n - lastFast > 6e5 && !dnd) { lastFast = n; kt.length = 0; toast('⌨️ Wih, ngetiknya ngebut! Jari jangan lupa istirahat 🔥'); setEmo('surprised', 1.5); }
+      if (kt.length >= 40 && n - lastFast > 6e5 && !dnd) { lastFast = n; kt.length = 0; toast('Wih, ngetiknya ngebut! Jari jangan lupa istirahat'); setEmo('surprised', 1.5); }
     }
   };
   addEventListener('keydown', onKey, true);
   let batt = null, lowWarned = false;
   const onBatt = () => {
-    if (!batt) return; const l = Math.round(batt.level * 100);
-    if (batt.charging) { lowWarned = false; return; }
-    if (l <= 20 && !lowWarned) { lowWarned = true; toast(`🔋 Baterai tinggal ${l}%. Colok charger ya`); }
-    else if (l > 30) lowWarned = false;
+    try {
+      if (!batt) return; const l = Math.round(batt.level * 100);
+      if (batt.charging) { lowWarned = false; return; }
+      if (l <= 20 && !lowWarned) { lowWarned = true; toast(`Baterai tinggal ${l}%. Colok charger ya`); }
+      else if (l > 30) lowWarned = false;
+    } catch (e) {}
   };
-  if (navigator.getBattery) navigator.getBattery().then(b => {
-    if (dead) return; batt = b; b.addEventListener('levelchange', onBatt); b.addEventListener('chargingchange', onBatt); onBatt();
-  }).catch(() => {});
-  const onOff = () => toast('📡 Koneksi internet terputus'), onOn = () => toast('📶 Internet tersambung lagi');
+  try {
+    if (navigator.getBattery) navigator.getBattery().then(b => {
+      if (dead) return; batt = b; b.addEventListener('levelchange', onBatt); b.addEventListener('chargingchange', onBatt); onBatt();
+    }).catch(() => {});
+  } catch (e) {}
+  const onOff = () => toast('Koneksi internet terputus'), onOn = () => toast('Internet tersambung lagi');
   addEventListener('offline', onOff); addEventListener('online', onOn);
 
   /* ---------- reminder ---------- */
   const LINES = [
-    'Astaghfirullah, istighfar sebentar yuk 🤲', "Hasbunallah wa ni'mal wakil 🤍", 'Laa hawla wa laa quwwata illaa billaah 🌿',
-    'Subhanallahi wa bihamdihi 📿', 'Pelan-pelan, yang penting jalan terus 🐾', 'Satu masalah satu waktu. Kamu bisa 💪',
-    'Tarik napas dalam... lalu hembuskan 😮‍💨', 'Sudah kerja keras hari ini, bangga ya 🌟', 'Jangan lupa senyum 🙂', 'Bahu rileks? Turunkan sedikit 🧘',
+    'Astaghfirullah, istighfar sebentar yuk', "Hasbunallah wa ni'mal wakil", 'Laa hawla wa laa quwwata illaa billaah',
+    'Subhanallahi wa bihamdihi ', 'Pelan-pelan, yang penting jalan terus', 'Satu masalah satu waktu. Kamu bisa',
+    'Tarik napas dalam... lalu hembuskan ', 'Sudah kerja keras hari ini, bangga ya', 'Jangan lupa senyum', 'Bahu rileks? Turunkan sedikit',
   ];
   const SEAS = [
-    ['halloween', 1020, 1102, 'Musim Halloween! Coba aksesori 🎃 di Pengaturan'],
+    ['halloween', 1020, 1102, 'Musim Halloween! Coba aksesori di Pengaturan'],
     ['ri', 801, 831, 'Bulan Kemerdekaan! Coba aksesori 🇮🇩 di Pengaturan'],
-    ['ny', 1228, 103, 'Menjelang tahun baru! Coba aksesori 🎆 di Pengaturan'],
+    ['ny', 1228, 103, 'Menjelang tahun baru! Coba aksesori di Pengaturan'],
   ];
   function rollDay() {
     const d = dayKey(0);
     if (st.date !== d) {
       st.date = d; st.water = 0; st.kicks = 0; st.fed = 0; st.best = 0; st.greet = {};
-      const keep = new Set(Array.from({ length: 14 }, (_, i) => dayKey(-i)));
+      for (const k in fired) delete fired[k];
+      const keep = new Set(Array.from({ length: 90 }, (_, i) => dayKey(-i)));
       for (const k in st.hist) if (!keep.has(k)) delete st.hist[k];
       saveS();
     }
@@ -1201,14 +1412,17 @@
     const em = hm(C.endTime); if (em < 0 || !isWeekday()) return;
     if (mm >= em && mm < em + 30 && !fired[id + 'end'] && !dnd) {
       fired[id + 'end'] = fired[id + 'pre'] = 1; weather('confetti', 6);
-      notify('🎉 Waktunya pulang! Rapikan meja, jangan lupa istirahat 🎒', [['Siap', () => {}]]);
+      notify('🎉 Waktunya pulang! Rapikan meja, jangan lupa istirahat 🎒\n\n' + summary(), [['Siap', () => {}]]);
     } else if (mm >= em - 30 && mm < em && !fired[id + 'pre'] && !hold) {
       if (sayAuto('Sebentar lagi pulang, tinggal ±' + (em - mm) + ' menit 🎒', 8000)) fired[id + 'pre'] = 1;
     }
   }
-  function tickR() {
+  function tickR0() {
+    if (EXT && !ctxOk()) { destroy(); return; }
     const n = Date.now(), dt = Math.min(120, (n - lastR) / 1000); lastR = n;
     rollDay(); updDnd(); { const m = nowMin(); night = m >= 22 * 60 || m < 4 * 60; }
+    /* tab non-pemimpin: hanya tampil, reminder dijalankan tab pemimpin */
+    if (!lead) { if (toasts.length && !dnd && say(toasts[0], 6000)) toasts.shift(); checkAch(); pump(); return; }
     if (isActive(n)) { A.sit += dt; A.eye += dt; A.water += dt; hist().a += dt / 60; } else { A.sit = 0; A.eye = 0; }
     st.hunger = clamp(st.hunger + dt * .0093, 0, 100);
     st.happy = clamp(st.happy - dt * (st.hunger > 80 ? .02 : .01), 0, 100);
@@ -1229,7 +1443,7 @@
         ['Sudah minum 💧', () => drink()], ['Nanti 15 mnt', () => { A.water = (C.waterMin - 15) * 60; }],
       ]);
     }
-    pomoStep(n); checkPrayer(n); checkDay(n); checkAch(); pump();
+    pomoStep(n); checkPrayer(n); checkRem(n); checkDay(n); checkAch(); pump();
     if (toasts.length && !dnd && say(toasts[0], 6000)) toasts.shift();
     if (st.hunger > 75 && n - lastHungry > 18e5 && !hold && sayAuto('Aku lapar 🍖 (klik kanan → Makan)', 4000)) lastHungry = n;
     if (n >= nextChat && !hold && mode !== 'sleep') {
@@ -1238,7 +1452,9 @@
       if (st.happy < 40) pool.push('Main yuk, bosen nih ⚽');
       if (sayAuto(pick(pool), 6000)) nextChat = n + rnd(30, 50) * 6e4;
     }
+    leadSync(false);
   }
+  function tickR() { try { tickR0(); } catch (e) {} }
   const iv = setInterval(tickR, 1e4);
 
   /* ---------- lifecycle ---------- */
@@ -1246,23 +1462,28 @@
     W = innerWidth; H = innerHeight; x = clamp(x, 0, W - S); y = clamp(y, 0, H - S);
     if (wx) { wx.cv.width = W; wx.cv.height = H; }
     if (bud) bud.x = clamp(bud.x, 0, W - bud.s);
+    chkFs();
   };
   addEventListener('resize', rs);
   function destroy() {
-    gameTok++; cancelAnimationFrame(raf); clearInterval(iv); clearTimeout(bt); clearTimeout(ht); stopBlink();
+    gameTok++; cancelAnimationFrame(raf); clearInterval(iv); clearInterval(leadIv); clearTimeout(bt); clearTimeout(ht); stopBlink();
     evs.forEach(a => removeEventListener(a, onAct, true)); removeEventListener('resize', rs); removeEventListener('pointermove', onMove, true);
     removeEventListener('keydown', onKey, true); removeEventListener('offline', onOff); removeEventListener('online', onOn);
-    doc.removeEventListener('visibilitychange', onVisible);
+    removeEventListener('focus', onFocus); removeEventListener('pagehide', leadRelease);
+    doc.removeEventListener('visibilitychange', onVisible); doc.removeEventListener('fullscreenchange', chkFs);
+    if (EXT) try { chrome.storage.onChanged.removeListener(onStore); } catch (e) {}
     if (batt) { batt.removeEventListener('levelchange', onBatt); batt.removeEventListener('chargingchange', onBatt); }
     if (idleAbort) idleAbort.abort();
+    leadRelease();
     saveS(); removeItem(); if (bud) bud.el.remove(); if (wx) wx.cv.remove();
-    panel.remove(); el.remove(); delete window.__aroPet;
+    decor.remove(); panel.remove(); el.remove(); delete window.__aroPet;
   }
   window.__aroPet = { destroy, setEmo };
   applyCfg(); updDnd(); rollDay();
   if (C.sysIdle && 'IdleDetector' in window && navigator.permissions) {
     navigator.permissions.query({ name: 'idle-detection' }).then(p => { if (p.state === 'granted') startIdle().catch(() => {}); }).catch(() => {});
   }
+  leadSync(!doc.hidden); chkFs();
   setTimeout(tickR, 1500);
   raf = requestAnimationFrame(tick);
   }
