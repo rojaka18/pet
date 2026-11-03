@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "Pet Layar",
+  "version": "4.0",
+  "description": "Hewan peliharaan layar dengan reminder duduk, minum, dan waktu sholat.",
+  "permissions": ["storage"],
+  "content_scripts": [
+    { "matches": ["<all_urls>"], "js": ["pet.js"], "run_at": "document_idle" }
+  ]
+}
