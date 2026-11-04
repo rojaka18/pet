@@ -174,17 +174,17 @@
     fetch(url).then(function(r){ return r.json(); }).then(function(j){
       var h = j.hourly, t = Math.round(j.current.temperature_2m), c = j.current.weather_code;
       var i = Math.max(0, h.time.indexOf(j.current.time.slice(0, 13) + ':00')), hit = -1;
-      for (var n = i; n < Math.min(i + 8, h.time.length); n++){
+      for (var n = isRain(c) ? i : i + 1; n < Math.min(i + 12, h.time.length); n++){
         if (h.precipitation_probability[n] >= 50 || isRain(h.weather_code[n])){ hit = n; break; }
       }
       if (hit >= 0){
         var storm = h.weather_code[hit] >= 95;
-        wText = t + '°C · ' + (storm ? 'Badai petir ' : 'Hujan ') + (hit === i ? 'sekarang' : 'jam ' + h.time[hit].slice(11, 16)) + ' (' + h.precipitation_probability[hit] + '%) · bawa payung';
+        wText = t + '°C · ' + (hit === i ? (storm ? 'Badai petir sekarang' : 'Hujan sekarang') : (storm ? 'Badai petir jam ' : 'Akan hujan jam ') + h.time[hit].slice(11, 16)) + ' (' + h.precipitation_probability[hit] + '%) · bawa payung';
         wMood = storm ? 'surprised' : 'sad';
       } else if (t >= 33){
         wText = t + '°C · Panas banget, minum air ya'; wMood = 'sleepy';
       } else {
-        wText = t + '°C · ' + (c <= 1 ? 'Cerah' : 'Berawan') + ' sampai 8 jam ke depan, aman'; wMood = (c <= 1) ? 'happy' : 'normal';
+        wText = t + '°C · ' + (c <= 1 ? 'Cerah' : 'Berawan') + ' sampai 12 jam ke depan, aman'; wMood = (c <= 1) ? 'happy' : 'normal';
       }
       if (!wLoaded){ wLoaded = true; announce(); }
     }).catch(function(){ if (!wText) wText = 'Cuaca belum bisa diambil'; });
