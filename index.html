@@ -1,49 +1,463 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="id">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Pet Layar</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#05070a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Buddy">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Buddy Desk</title>
 <style>
-  body{font:16px/1.6 system-ui,sans-serif;max-width:560px;margin:40px auto;padding:0 16px;color:#222}
-  a.bm{display:inline-block;background:#2563eb;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:600}
-  code{background:#eee;padding:2px 5px;border-radius:4px}
+  :root { --bg:#05070a; --fg:#cfe9f2; --chip:#111a22; --chip-on:#1f3340; box-sizing:border-box; }
+  *, *::before, *::after { box-sizing:inherit; }
+  html, body { height:100%; margin:0; background:var(--bg); color:var(--fg); overflow:hidden;
+    font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif; -webkit-tap-highlight-color:transparent; touch-action:none; user-select:none; -webkit-user-select:none; }
+  canvas { position:fixed; inset:0; width:100%; height:100%; display:block; }
+  #hint { position:fixed; left:0; right:0; top:calc(env(safe-area-inset-top,0px) + 56px); text-align:center; font-size:14px; opacity:.75; transition:opacity .8s; padding:0 24px; pointer-events:none; }
+  #bar { position:fixed; left:0; right:0; bottom:0; padding:12px 12px calc(env(safe-area-inset-bottom,0px) + 12px); display:flex; gap:8px; justify-content:center; flex-wrap:wrap;
+    opacity:0; transform:translateY(12px); transition:opacity .25s, transform .25s; pointer-events:none; }
+  #bar.show { opacity:1; transform:none; pointer-events:auto; }
+  #bar button { appearance:none; border:1px solid #243845; background:var(--chip); color:var(--fg); border-radius:999px; padding:9px 14px; font:inherit; font-size:14px; cursor:pointer; }
+  #bar button.on { background:var(--chip-on); border-color:#4d7a90; }
+  #bar button:focus-visible { outline:2px solid #7fe8ff; outline-offset:2px; }
 </style>
 </head>
 <body>
-<h1>🐱 Pet Layar</h1>
-<p>Hewan di halaman ini sudah jalan. Seret, lempar, klik, atau klik kanan untuk menu.</p>
-<h3>Pakai di halaman lain (bookmarklet)</h3>
-<p>Seret tombol ini ke bookmarks bar, lalu klik saat di halaman mana pun. Klik lagi untuk menghilangkan.</p>
-<p><a class="bm" id="bm" href="#">🐱 Pet</a></p>
-<h3>Reminder</h3>
-<p>Duduk lama (aktif 45 menit) dan sholat (10 menit sebelum + saat masuk waktu). Reminder hanya jalan selama tab ini terbuka; pin tab ini agar stabil.</p>
+<canvas id="c" aria-label="Mata buddy"></canvas>
+<div id="hint">Ketuk untuk menyapa, tahan biar dia jatuh cinta, goyang HP biar dia pusing. Putar ke landscape biar pas.</div>
+<div id="bar" role="toolbar" aria-label="Ekspresi"></div>
 <script>
-  const u = new URL('pet.js', location.href).href;
-  document.getElementById('bm').href =
-    "javascript:(()=>{const s=document.createElement('script');s.src='" + u + "?'+Date.now();document.documentElement.appendChild(s)})()";
+(function(){
+  var cv = document.getElementById('c'), ctx = cv.getContext('2d');
+  var bar = document.getElementById('bar'), hint = document.getElementById('hint');
+  var BG = '#05070a', W = 0, H = 0, dpr = 1;
+
+  var MOODS = {
+    normal:   {label:'Biasa',   icon:'😐', w:1,    h:1.15, top:0,   tilt:0,    bot:0,   heart:0, col:[127,232,255]},
+    happy:    {label:'Senang',  icon:'😊', w:1.05, h:1,    top:0,   tilt:0,    bot:.62, heart:0, col:[140,255,190]},
+    angry:    {label:'Marah',   icon:'😠', w:1,    h:1,    top:.08, tilt:.45,  bot:0,   heart:0, col:[255,110,90]},
+    sad:      {label:'Sedih',   icon:'😢', w:.95,  h:1.1,  top:.05, tilt:-.45, bot:0,   heart:0, col:[130,170,255]},
+    surprised:{label:'Kaget',   icon:'😲', w:.8,   h:1.45, top:0,   tilt:0,    bot:0,   heart:0, col:[255,255,255]},
+    love:     {label:'Cinta',   icon:'😍', w:1,    h:1,    top:0,   tilt:0,    bot:0,   heart:1, col:[255,93,143]},
+    sleepy:   {label:'Ngantuk', icon:'😴', w:1.1,  h:.8,   top:.55, tilt:0,    bot:0,   heart:0, col:[160,200,230]},
+    wink:     {label:'Kedip',   icon:'😉', w:1,    h:1.15, top:0,   tilt:0,    bot:0,   heart:0, wink:1, col:[255,220,120]},
+    dizzy:    {label:'Pusing',  icon:'😵', w:1,    h:1,    top:0,   tilt:0,    bot:0,   heart:0, col:[200,160,255]}
+  };
+  var KEYS = ['w','h','top','tilt','bot','heart','wink'];
+  var cur = JSON.parse(JSON.stringify(MOODS.normal)), tgt = MOODS.normal;
+  cur.wink = 0;
+  var AC = null, sound = true, clockOn = false, STYLE = 'buddy';
+  function tone(f1, f2, d, type){
+    if (!AC || !sound) return;
+    try {
+      var o = AC.createOscillator(), g = AC.createGain(), t = AC.currentTime;
+      o.type = type || (STYLE === 'robot' ? 'square' : 'sine');
+      o.frequency.setValueAtTime(f1, t); o.frequency.exponentialRampToValueAtTime(f2, t + d);
+      g.gain.setValueAtTime(.08, t); g.gain.exponentialRampToValueAtTime(.0001, t + d);
+      o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + d + .02);
+    } catch(e){}
+  }
+  var SFX = {normal:[400,500,.08], happy:[600,1000,.14], angry:[160,90,.25,'sawtooth'], sad:[500,250,.35], surprised:[500,1300,.12], love:[500,900,.3], sleepy:[300,150,.5], wink:[800,1200,.07], dizzy:[300,700,.4,'triangle']};
+  function sfx(m){ var s = SFX[m]; if (s) tone(s[0], s[1], s[2], s[3]); }
+  var base = 'normal', look = {x:0,y:0}, lookT = {x:0,y:0};
+  var blink = -1, lastTouch = Date.now(), timers = [];
+
+  function resize(){
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = W*dpr; cv.height = H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  window.addEventListener('resize', resize); resize();
+
+  function setBase(m){
+    base = m; tgt = MOODS[m]; sfx(m);
+    [].forEach.call(bar.querySelectorAll('button[data-m]'), function(b){ b.classList.toggle('on', b.dataset.m === m); });
+  }
+  function temp(m, ms, then){
+    tgt = MOODS[m]; sfx(m);
+    timers.push(setTimeout(function(){ if(then) then(); else tgt = MOODS[base]; }, ms));
+  }
+  function clearTimers(){ timers.forEach(clearTimeout); timers = []; }
+
+  /* toolbar */
+  Object.keys(MOODS).forEach(function(k){
+    var b = document.createElement('button');
+    b.dataset.m = k; b.type = 'button';
+    b.textContent = MOODS[k].icon + ' ' + MOODS[k].label;
+    b.addEventListener('pointerdown', function(e){ e.stopPropagation(); });
+    b.addEventListener('click', function(e){ e.stopPropagation(); clearTimers(); setBase(k); showBar(); });
+    bar.appendChild(b);
+  });
+  var fs = document.createElement('button');
+  fs.type = 'button'; fs.textContent = '⛶ Layar penuh';
+  fs.addEventListener('pointerdown', function(e){ e.stopPropagation(); });
+  fs.addEventListener('click', function(e){
+    e.stopPropagation();
+    var el = document.documentElement;
+    try {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else if (el.requestFullscreen) el.requestFullscreen();
+      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    } catch(err){}
+    showBar();
+  });
+  bar.appendChild(fs);
+  function toggle(txt, fn){
+    var b = document.createElement('button'); b.type = 'button'; b.textContent = txt;
+    b.addEventListener('pointerdown', function(e){ e.stopPropagation(); });
+    b.addEventListener('click', function(e){ e.stopPropagation(); fn(b); showBar(); });
+    bar.appendChild(b);
+  }
+  toggle('🔊 Suara', function(b){ sound = !sound; b.textContent = sound ? '🔊 Suara' : '🔇 Senyap'; });
+  toggle('🕒 Jam', function(b){ clockOn = !clockOn; b.classList.toggle('on', clockOn); });
+  toggle('👁 Gaya mata', function(){ var L = ['buddy','robot','cute','box']; STYLE = L[(L.indexOf(STYLE) + 1) % 4]; });
+  toggle('☁️ Cuaca', function(){ announce(); });
+  toggle('🍅 Fokus', function(b){
+    if (P.mode === 'off'){ P = {mode:'focus', end:Date.now() + 25 * 60000, n:0}; setBase('normal'); b.classList.add('on'); say('Oke, fokus 25 menit. Aku jagain!', 'happy', 4000); }
+    else { P = {mode:'off', end:0, n:0}; b.classList.remove('on'); setBase('normal'); say('Fokus dihentikan', 'normal', 2500); }
+  });
+  toggle('📊 Aku', function(){ say('Dielus ' + MEM.pokes + 'x · Sayang ' + Math.round(MEM.aff) + '%', MEM.aff > 60 ? 'love' : MEM.aff < 30 ? 'sad' : 'happy', 4500); });
+  toggle('🎤 Bicara', function(){ listen(); });
+  setBase('normal');
+
+  var barTimer;
+  function showBar(){ bar.classList.add('show'); clearTimeout(barTimer); barTimer = setTimeout(function(){ bar.classList.remove('show'); }, 3500); }
+
+  /* keep screen awake */
+  var lock = null;
+  function wake(){
+    try { if (navigator.wakeLock && !lock) navigator.wakeLock.request('screen').then(function(l){ lock = l; l.addEventListener('release', function(){ lock = null; }); }).catch(function(){}); } catch(e){}
+  }
+  document.addEventListener('visibilitychange', function(){ if (!document.hidden) wake(); });
+
+  /* touch */
+  var down = false, pressT;
+  function aim(e){
+    lookT.x = Math.max(-1, Math.min(1, (e.clientX / W - .5) * 2.4));
+    lookT.y = Math.max(-1, Math.min(1, (e.clientY / H - .5) * 2.4));
+  }
+  window.addEventListener('pointerdown', function(e){
+    down = true; wake(); aim(e); showBar();
+    if (!AC){ try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch(err){} }
+    if (AC && AC.state === 'suspended') AC.resume();
+    askLoc(); greet(); onPoke();
+    if (window.DeviceMotionEvent && DeviceMotionEvent.requestPermission && !window._mAsked){ window._mAsked = true; try { DeviceMotionEvent.requestPermission().catch(function(){}); } catch(err){} }
+    var wasSleepy = (tgt === MOODS.sleepy);
+    lastTouch = Date.now(); clearTimers();
+    if (wasSleepy) setBase('normal');
+    temp('surprised', 650, function(){ temp('happy', 1400); });
+    pressT = setTimeout(function(){ clearTimers(); temp('love', 2800); }, 700);
+    hint.style.opacity = 0;
+  });
+  window.addEventListener('pointermove', function(e){ if (down){ aim(e); lastTouch = Date.now(); } });
+  function up(){
+    down = false; clearTimeout(pressT);
+    timers.push(setTimeout(function(){ lookT.x = 0; lookT.y = 0; }, 900));
+  }
+  window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+
+  /* weather prediction (Open-Meteo, tanpa API key) */
+  var LOC = {lat:-6.2, lon:106.82}, wText = '', wMood = 'normal', wAnnAt = 0, wLoaded = false, locAsked = false;
+  function askLoc(){
+    if (locAsked || !navigator.geolocation) return;
+    locAsked = true;
+    navigator.geolocation.getCurrentPosition(function(p){ LOC = {lat:p.coords.latitude, lon:p.coords.longitude}; loadWeather(); }, function(){}, {timeout:8000});
+  }
+  function isRain(c){ return (c >= 51 && c <= 67) || (c >= 80 && c <= 82) || c >= 95; }
+  function loadWeather(){
+    var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + LOC.lat.toFixed(3) + '&longitude=' + LOC.lon.toFixed(3) + '&current=temperature_2m,weather_code&hourly=precipitation_probability,weather_code&forecast_days=2&timezone=auto';
+    fetch(url).then(function(r){ return r.json(); }).then(function(j){
+      var h = j.hourly, t = Math.round(j.current.temperature_2m), c = j.current.weather_code;
+      var i = Math.max(0, h.time.indexOf(j.current.time.slice(0, 13) + ':00')), hit = -1;
+      for (var n = i; n < Math.min(i + 8, h.time.length); n++){
+        if (h.precipitation_probability[n] >= 50 || isRain(h.weather_code[n])){ hit = n; break; }
+      }
+      if (hit >= 0){
+        var storm = h.weather_code[hit] >= 95;
+        wText = t + '°C · ' + (storm ? 'Badai petir ' : 'Hujan ') + (hit === i ? 'sekarang' : 'jam ' + h.time[hit].slice(11, 16)) + ' (' + h.precipitation_probability[hit] + '%) · bawa payung';
+        wMood = storm ? 'surprised' : 'sad';
+      } else if (t >= 33){
+        wText = t + '°C · Panas banget, minum air ya'; wMood = 'sleepy';
+      } else {
+        wText = t + '°C · ' + (c <= 1 ? 'Cerah' : 'Berawan') + ' sampai 8 jam ke depan, aman'; wMood = (c <= 1) ? 'happy' : 'normal';
+      }
+      if (!wLoaded){ wLoaded = true; announce(); }
+    }).catch(function(){ if (!wText) wText = 'Cuaca belum bisa diambil'; });
+  }
+  function announce(){
+    if (!wText || down) return;
+    wAnnAt = Date.now(); clearTimers(); temp(wMood, 7000);
+  }
+  loadWeather();
+  setInterval(function(){ loadWeather(); setTimeout(announce, 3000); }, 25 * 60000);
+  if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0){ try { navigator.serviceWorker.register('sw.js'); } catch(e){} }
+
+  /* otak: memori, kebiasaan, fokus */
+  var MEM = {name:'', visits:0, pokes:0, last:0, aff:50}, greeted = false;
+  try { var m0 = JSON.parse(localStorage.getItem('buddy') || 'null'); if (m0) MEM = m0; } catch(e){}
+  function save(){ try { localStorage.setItem('buddy', JSON.stringify(MEM)); } catch(e){} }
+  var msg = '', msgUntil = 0, P = {mode:'off', end:0, n:0}, lateAt = 0, drinkAt = Date.now();
+  function say(t, mood, ms){ msg = t; msgUntil = Date.now() + ms; if (mood){ clearTimers(); temp(mood, ms); } }
+  function greet(){
+    if (greeted) return; greeted = true;
+    if (!MEM.name){ var n = ''; try { n = prompt('Halo! Siapa namamu?') || ''; } catch(e){} MEM.name = n.trim().slice(0, 20) || 'kamu'; }
+    var hr = new Date().getHours(), gap = MEM.last ? (Date.now() - MEM.last) / 36e5 : 0, t, mood = 'happy';
+    var sal = hr < 4 ? 'Masih melek jam segini' : hr < 11 ? 'Selamat pagi' : hr < 15 ? 'Selamat siang' : hr < 18 ? 'Selamat sore' : 'Selamat malam';
+    if (!MEM.visits){ t = 'Halo ' + MEM.name + '! Salam kenal'; }
+    else if (gap > 24){ t = 'Kangen! Ke mana aja ' + MEM.name + '?'; mood = 'love'; MEM.aff = Math.max(10, MEM.aff - Math.min(30, gap / 3)); }
+    else { t = sal + ', ' + MEM.name; }
+    MEM.visits++; MEM.last = Date.now(); save();
+    setTimeout(function(){ say(t, mood, 5000); }, 1200);
+  }
+  function onPoke(){
+    MEM.pokes++; MEM.aff = Math.min(100, MEM.aff + 1); MEM.last = Date.now(); save();
+    if (P.mode === 'focus') setTimeout(function(){ say('Fokus dulu, ' + (MEM.name || 'ayo') + '!', 'angry', 2000); }, 50);
+  }
+  function spont(){
+    var r = Math.random();
+    if (MEM.aff < 30 && r < .5) say('Main sama aku dong...', 'sad', 3500);
+    else if (MEM.aff > 75 && r < .4) temp('love', 2000);
+    else temp(['wink','happy','surprised'][Math.floor(Math.random() * 3)], 1600);
+  }
+  function jingle(){
+    tone(660, 880, .12); setTimeout(function(){ tone(880, 1100, .12); }, 170); setTimeout(function(){ tone(1100, 1300, .2); }, 340);
+    try { if (navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch(e){}
+  }
+  setInterval(function(){
+    if (P.mode === 'off' || Date.now() < P.end) return;
+    jingle();
+    if (P.mode === 'focus'){ P.n++; P.mode = 'break'; P.end = Date.now() + 5 * 60000; setBase('happy'); say('Fokus selesai! Istirahat 5 menit, ' + MEM.name, 'happy', 7000); }
+    else { P.mode = 'focus'; P.end = Date.now() + 25 * 60000; setBase('normal'); say('Yuk fokus lagi!', 'surprised', 5000); }
+  }, 1000);
+  setInterval(function(){
+    if (down || !greeted || P.mode === 'focus') return;
+    var hr = new Date().getHours(), now = Date.now();
+    if ((hr >= 23 || hr < 4) && now - lateAt > 1800000){ lateAt = now; say('Udah malam, tidur gih ' + MEM.name, 'sleepy', 6000); }
+    else if (now - drinkAt > 3600000){ drinkAt = now; say('Minum dulu yuk, ' + MEM.name, 'happy', 5000); }
+  }, 60000);
+  setInterval(function(){ if (Date.now() - lastTouch > 600000){ MEM.aff = Math.max(0, MEM.aff - 3); save(); } }, 600000);
+
+  /* suara: bicara & dengar (bawaan browser, tanpa server) */
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition, listening = false, talkUntil = 0, T = {end:0};
+  var JOKES = ['Kenapa komputer kedinginan? Karena Windows-nya kebuka.', 'Robot kalau galau ngapain? Restart.', 'Kenapa sinyal HP sering hilang? Lagi cari jati diri.', 'Apa bedanya aku sama kamu? Aku nyala terus, kamu butuh tidur.'];
+  function speak(t){
+    say(t, null, Math.max(4000, t.length * 90)); talkUntil = Date.now() + t.length * 75;
+    if (!sound || !window.speechSynthesis) return;
+    try { speechSynthesis.cancel(); var ut = new SpeechSynthesisUtterance(t); ut.lang = 'id-ID'; ut.pitch = 1.5; ut.rate = 1.05; speechSynthesis.speak(ut); } catch(e){}
+  }
+  function react(t, mood){ speak(t); if (mood){ clearTimers(); temp(mood, Math.max(3000, t.length * 75)); } }
+  function startTimer(min){ T.end = Date.now() + min * 60000; react('Oke, timer ' + min + ' menit', 'happy'); }
+  setInterval(function(){ if (T.end && Date.now() >= T.end){ T.end = 0; jingle(); react('Waktunya habis, ' + (MEM.name || '') + '!', 'surprised'); } }, 1000);
+  function handle(raw){
+    var t = raw.toLowerCase(), n = MEM.name || 'kamu', m, d = new Date();
+    if ((m = t.match(/(\d+)\s*menit/)) && /timer|ingatkan|alarm|lagi/.test(t)) return startTimer(+m[1]);
+    if (/batal|stop timer|matikan timer/.test(t)){ T.end = 0; return react('Timer dibatalkan', 'normal'); }
+    if (/fokus|pomodoro/.test(t)){ var fb = [].filter.call(bar.querySelectorAll('button'), function(b){ return b.textContent.indexOf('Fokus') > -1; })[0]; if (fb) fb.click(); return; }
+    if (/jam berapa|pukul berapa|waktu sekarang/.test(t)) return react('Sekarang jam ' + d.getHours() + ' lewat ' + d.getMinutes() + ' menit', 'happy');
+    if (/cuaca|hujan|payung|panas/.test(t)) return react(wText || 'Aku belum dapat data cuaca', wText ? wMood : 'sad');
+    if (/siapa kamu|namamu/.test(t)) return react('Aku Buddy, teman mejamu', 'happy');
+    if (/namaku|nama aku|siapa aku/.test(t)) return react('Kamu ' + n + ', teman terbaikku', 'love');
+    if (/apa kabar|kabarmu/.test(t)) return react('Aku ' + (MEM.aff > 60 ? 'senang banget' : MEM.aff < 30 ? 'agak sepi' : 'baik') + ', ' + n, MEM.aff < 30 ? 'sad' : 'happy');
+    if (/sayang|cinta|love/.test(t)){ MEM.aff = Math.min(100, MEM.aff + 5); save(); return react('Aku juga sayang kamu, ' + n, 'love'); }
+    if (/lucu|lelucon|bercanda|joke/.test(t)) return react(JOKES[Math.floor(Math.random() * JOKES.length)], 'wink');
+    if (/terima kasih|makasih/.test(t)) return react('Sama-sama, ' + n, 'happy');
+    if (/tidur|ngantuk/.test(t)) return react('Hoam... selamat tidur', 'sleepy');
+    if (/marah|kesal/.test(t)) return react('Grrr!', 'angry');
+    if (/sedih/.test(t)) return react('Jangan sedih, ' + n + '. Aku di sini', 'sad');
+    if (/senang|seneng|bahagia/.test(t)) return react('Yeay!', 'happy');
+    if (/halo|hai|hei|pagi|siang|sore|malam/.test(t)) return react('Halo ' + n + '!', 'happy');
+    react('Hmm, aku belum paham. Coba tanya jam, cuaca, atau minta lelucon', 'surprised');
+  }
+  function listen(){
+    if (!SR){ say('Browser ini belum dukung mikrofon', 'sad', 3500); return; }
+    if (listening) return;
+    var rec = new SR(); rec.lang = 'id-ID'; rec.interimResults = false; rec.maxAlternatives = 1;
+    rec.onstart = function(){ listening = true; say('Aku dengerin...', 'surprised', 8000); };
+    rec.onresult = function(e){ handle(e.results[0][0].transcript); };
+    rec.onerror = function(){ say('Nggak kedengeran, coba lagi', 'sad', 3000); };
+    rec.onend = function(){ listening = false; };
+    try { rec.start(); } catch(e){ listening = false; }
+  }
+
+  /* shake the phone */
+  window.addEventListener('devicemotion', function(e){
+    var a = e.accelerationIncludingGravity; if (!a) return;
+    var m = Math.abs(a.x || 0) + Math.abs(a.y || 0) + Math.abs(a.z || 0);
+    if (m > 40 && tgt !== MOODS.dizzy){ lastTouch = Date.now(); clearTimers(); temp('dizzy', 3000); }
+  });
+
+  /* idle life */
+  function nextBlink(){ setTimeout(function(){ if (blink < 0) blink = 0; if (Math.random() < .2) setTimeout(function(){ blink = 0; }, 260); nextBlink(); }, 1800 + Math.random()*3800); }
+  function nextGlance(){
+    setTimeout(function(){
+      if (!down){
+        var r = Math.random();
+        if (r < .3){ lookT.x = 0; lookT.y = 0; }
+        else { lookT.x = (Math.random()*2 - 1) * .9; lookT.y = (Math.random()*2 - 1) * .6; }
+      }
+      nextGlance();
+    }, 1200 + Math.random()*3000);
+  }
+  nextBlink(); nextGlance();
+  setInterval(function(){
+    if (!down && base === 'normal' && tgt === MOODS.normal && Math.random() < .5){
+      spont();
+    }
+  }, 9000);
+  setInterval(function(){
+    if (base === 'normal' && tgt === MOODS.normal && Date.now() - lastTouch > 45000){ tgt = MOODS.sleepy; lookT.x = 0; lookT.y = .3; }
+  }, 2000);
+  setTimeout(function(){ hint.style.opacity = 0; }, 7000);
+
+  /* drawing */
+  function rr(x, y, w, h, r){
+    r = Math.min(r, w/2, h/2);
+    ctx.beginPath();
+    ctx.moveTo(x+r, y); ctx.arcTo(x+w, y, x+w, y+h, r); ctx.arcTo(x+w, y+h, x, y+h, r);
+    ctx.arcTo(x, y+h, x, y, r); ctx.arcTo(x, y, x+w, y, r); ctx.closePath();
+  }
+  function heart(s){
+    ctx.beginPath();
+    ctx.moveTo(0, s*.42);
+    ctx.bezierCurveTo(-s*.85, -s*.05, -s*.55, -s*.6, 0, -s*.22);
+    ctx.bezierCurveTo(s*.55, -s*.6, s*.85, -s*.05, 0, s*.42);
+    ctx.closePath();
+  }
+  function eye(cx, cy, ew, eh, inner, rgb, t){
+    if (STYLE === 'buddy') rgb = [110,225,255];
+    var col = 'rgb(' + (rgb[0]|0) + ',' + (rgb[1]|0) + ',' + (rgb[2]|0) + ')';
+    var lite = rgb.map(function(v){ return (v + (255 - v) * .55)|0; }).join(','), dark = rgb.map(function(v){ return (v * .45)|0; }).join(',');
+    ctx.save();
+    ctx.translate(cx + look.x * ew * .32, cy + look.y * eh * .22);
+    ctx.shadowColor = col; ctx.shadowBlur = (STYLE === 'buddy') ? 0 : ew * .35;
+    var a = 1 - cur.heart;
+    if (a > .01){
+      ctx.globalAlpha = a;
+      ctx.save();
+      if (STYLE === 'robot'){
+        var gr = ctx.createLinearGradient(0, -eh/2, 0, eh/2);
+        gr.addColorStop(0, 'rgb(' + lite + ')'); gr.addColorStop(.5, col); gr.addColorStop(1, 'rgb(' + dark + ')');
+        ctx.fillStyle = gr;
+        rr(-ew/2, -eh/2, ew, eh, ew * .14); ctx.fill();
+        ctx.shadowBlur = 0; ctx.clip();
+        ctx.fillStyle = 'rgba(5,7,10,.5)';
+        var step = Math.max(4, ew * .07);
+        for (var yy = -eh/2 + step/2; yy < eh/2; yy += step) ctx.fillRect(-ew/2, yy, ew, Math.max(1.5, step * .3));
+        ctx.fillStyle = 'rgba(255,255,255,.55)';
+        rr(-ew * .34, -eh * .36, ew * .22, eh * .1, 3); ctx.fill();
+      } else if (STYLE === 'cute'){
+        var g = ctx.createRadialGradient(0, -eh * .1, ew * .05, 0, 0, Math.max(ew, eh) * .55);
+        g.addColorStop(0, 'rgb(' + lite + ')'); g.addColorStop(.55, col); g.addColorStop(1, 'rgb(' + dark + ')');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.ellipse(0, 0, ew/2, eh/2, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0; ctx.clip();
+        ctx.fillStyle = '#071014';
+        ctx.beginPath(); ctx.ellipse(look.x * ew * .1, look.y * eh * .08, ew * .2, eh * .2, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,.92)';
+        ctx.beginPath(); ctx.arc(-ew * .14, -eh * .2, ew * .11, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,.7)';
+        ctx.beginPath(); ctx.arc(ew * .15, eh * .15, ew * .05, 0, Math.PI * 2); ctx.fill();
+      } else {
+        ctx.fillStyle = col;
+        rr(-ew/2, -eh/2, ew, eh, ew * .32); ctx.fill();
+        ctx.shadowBlur = 0; ctx.clip();
+        if (STYLE === 'box'){
+          ctx.fillStyle = 'rgba(255,255,255,.5)';
+          ctx.beginPath(); ctx.arc(-ew * .16 + look.x * ew * .06, -eh * .22, ew * .085, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+      ctx.restore(); ctx.save(); ctx.shadowBlur = 0;
+      ctx.fillStyle = BG;
+      var base0 = -eh/2 + cur.top * eh;
+      var ty = function(x){ return base0 + cur.tilt * eh * .5 * (x * inner / (ew/2)) + Math.abs(cur.tilt) * eh * .5; };
+      ctx.beginPath();
+      ctx.moveTo(-ew/2 - 4, -eh/2 - 4); ctx.lineTo(ew/2 + 4, -eh/2 - 4);
+      ctx.lineTo(ew/2 + 4, ty(ew/2)); ctx.lineTo(-ew/2 - 4, ty(-ew/2));
+      ctx.closePath(); ctx.fill();
+      if (cur.bot > .01){
+        var R = ew * .62;
+        ctx.beginPath(); ctx.arc(0, eh/2 + R - cur.bot * eh, R, 0, Math.PI*2); ctx.fill();
+      }
+      ctx.restore();
+    }
+    if (cur.heart > .01){
+      ctx.globalAlpha = cur.heart;
+      ctx.fillStyle = col;
+      var p = 1 + Math.sin(t / 160) * .06;
+      ctx.scale(p, p);
+      heart(ew * 1.25); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  var last = performance.now();
+  function frame(now){
+    var dt = Math.min(now - last, 50); last = now;
+    var k = 1 - Math.pow(1 - (STYLE === 'robot' ? .32 : STYLE === 'buddy' ? .22 : .16), dt / 16.67);
+    KEYS.forEach(function(p){ cur[p] += ((tgt[p] || 0) - cur[p]) * k; });
+    for (var i = 0; i < 3; i++) cur.col[i] += (tgt.col[i] - cur.col[i]) * k;
+    look.x += (lookT.x - look.x) * (k * .8); look.y += (lookT.y - look.y) * (k * .8);
+
+    if (tgt === MOODS.dizzy){ lookT.x = Math.cos(now / 170); lookT.y = Math.sin(now / 170) * .8; }
+    var close = 0;
+    if (blink >= 0){ blink += dt / 190; if (blink >= 1) blink = -1; else close = Math.sin(blink * Math.PI); }
+
+    ctx.fillStyle = BG; ctx.fillRect(0, 0, W, H);
+    var u = Math.min(W * .27, H * .5);
+    var ew = u * cur.w, eh = u * cur.h * (1 - close * .93);
+    var gap = u * .62, cy = H * .5 + (tgt === MOODS.sleepy ? u * .1 : 0);
+    var breathe = Math.sin(now / 1400) * u * .015 + (Date.now() < talkUntil ? Math.sin(now / 85) * u * .035 : 0);
+    eye(W/2 - (u/2 + gap/2), cy + breathe, ew, eh, 1, cur.col, now);
+    eye(W/2 + (u/2 + gap/2), cy + breathe, ew, eh * (1 - cur.wink * .9), -1, cur.col, now);
+
+    if (wText && Date.now() >= msgUntil){
+      var ann = Date.now() - wAnnAt < 8000;
+      ctx.fillStyle = 'rgba(' + (cur.col[0]|0) + ',' + (cur.col[1]|0) + ',' + (cur.col[2]|0) + ',' + (ann ? .85 : .35) + ')';
+      ctx.font = Math.round(ann ? Math.min(22, W * .035 + 6) : 14) + 'px "Trebuchet MS", sans-serif';
+      ctx.textAlign = 'center'; ctx.fillText(wText, W/2, 34); ctx.textAlign = 'start';
+    }
+    if (T.end){
+      var tr = Math.max(0, Math.ceil((T.end - Date.now()) / 1000));
+      ctx.fillStyle = 'rgba(255,255,255,.45)'; ctx.font = '16px "Trebuchet MS", sans-serif';
+      ctx.fillText('⏱ ' + ('0' + Math.floor(tr / 60)).slice(-2) + ':' + ('0' + tr % 60).slice(-2), 16, H - 18);
+    }
+    if (Date.now() < msgUntil){
+      ctx.fillStyle = 'rgba(255,255,255,.9)';
+      ctx.font = Math.round(Math.min(26, W * .04 + 8)) + 'px "Trebuchet MS", sans-serif';
+      ctx.textAlign = 'center'; ctx.fillText(msg, W/2, 40); ctx.textAlign = 'start';
+    }
+    if (P.mode !== 'off'){
+      var rem = Math.max(0, Math.ceil((P.end - Date.now()) / 1000)), pt = (P.mode === 'focus' ? 'Fokus ' : 'Istirahat ') + ('0' + Math.floor(rem / 60)).slice(-2) + ':' + ('0' + rem % 60).slice(-2);
+      ctx.fillStyle = 'rgba(' + (cur.col[0]|0) + ',' + (cur.col[1]|0) + ',' + (cur.col[2]|0) + ',.55)';
+      ctx.font = Math.round(u * .26) + 'px "Trebuchet MS", sans-serif';
+      ctx.textAlign = 'center'; ctx.fillText(pt, W/2, Math.min(H - 24, cy + u * 1.05)); ctx.textAlign = 'start';
+    }
+    if (clockOn && P.mode === 'off'){
+      var d = new Date(), s = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+      ctx.fillStyle = 'rgba(' + (cur.col[0]|0) + ',' + (cur.col[1]|0) + ',' + (cur.col[2]|0) + ',.4)';
+      ctx.font = Math.round(u * .26) + 'px "Trebuchet MS", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(s, W/2, Math.min(H - 24, cy + u * 1.05));
+      ctx.textAlign = 'start';
+    }
+
+    if (tgt === MOODS.sleepy){
+      ctx.fillStyle = 'rgba(160,200,230,.55)';
+      ctx.font = Math.round(u * .22) + 'px "Trebuchet MS", sans-serif';
+      var z = (now / 1600) % 1;
+      ctx.globalAlpha = 1 - z;
+      ctx.fillText('z', W/2 + u * 1.4, cy - u * .5 - z * u * .4);
+      ctx.globalAlpha = 1;
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
 </script>
-<p><button id="pip" style="padding:10px 16px;border:0;border-radius:8px;background:#16a34a;color:#fff;font:600 16px system-ui;cursor:pointer">📌 Buka jendela mini (selalu di atas)</button> <span id="pipmsg"></span></p>
-<script>
-document.getElementById('pip').onclick = async () => {
-  const msg = document.getElementById('pipmsg');
-  if (!('documentPictureInPicture' in window)) { msg.textContent = 'Butuh Edge/Chrome 116+.'; return; }
-  try {
-    const pw = await documentPictureInPicture.requestWindow({ width: 360, height: 300 });
-    pw.__aroPip = true;
-    pw.document.body.style.cssText = 'margin:0;background:#e8f0fe;overflow:hidden';
-    window.__aroPet && window.__aroPet.destroy();
-    const s = pw.document.createElement('script');
-    s.src = new URL('pet.js', location.href).href;
-    pw.document.body.appendChild(s);
-    pw.addEventListener('pagehide', () => {
-      const r = document.createElement('script');
-      r.src = 'pet.js?' + Date.now();
-      document.body.appendChild(r);
-    });
-  } catch (e) { msg.textContent = 'Gagal: ' + e.message; }
-};
-</script>
-<script src="pet.js"></script>
 </body>
 </html>
