@@ -150,7 +150,7 @@ function pollQ(){
       if (d.error) return;
       qWait = d.menunggu;
       if (qSince < 0){ qSince = d.maxId; return; }   // polling pertama: abaikan antrean lama
-      if (d.maxId < qSince) qSince = d.maxId;        // ganti hari / nomor reset
+      if (d.maxId < qSince){ qSince = 0; return; }   // ganti hari / nomor reset   // ganti hari / nomor reset
       if (d.baru && d.baru.length){ d.baru.forEach(function(x){ if (x.id > qSince) qSince = x.id; }); qNotify(d.baru); }
     })
     .catch(function(){})
