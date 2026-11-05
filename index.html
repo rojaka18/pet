@@ -37,15 +37,15 @@
   var BG = '#05070a', W = 0, H = 0, dpr = 1;
 
   var MOODS = {
-    normal:   {label:'Biasa', w:1,    h:1.15, top:0,   tilt:0,    bot:0,   heart:0, col:[127,232,255]},
-    happy:    {label:'Senang', w:1.05, h:1,    top:0,   tilt:0,    bot:.62, heart:0, col:[140,255,190]},
-    angry:    {label:'Marah',  w:1,    h:1,    top:.08, tilt:.45,  bot:0,   heart:0, col:[255,110,90]},
-    sad:      {label:'Sedih', w:.95,  h:1.1,  top:.05, tilt:-.45, bot:0,   heart:0, col:[130,170,255]},
-    surprised:{label:'Kaget', w:.8,   h:1.45, top:0,   tilt:0,    bot:0,   heart:0, col:[255,255,255]},
-    love:     {label:'Cinta', w:1,    h:1,    top:0,   tilt:0,    bot:0,   heart:1, col:[255,93,143]},
-    sleepy:   {label:'Ngantuk', w:1.1,  h:.8,   top:.55, tilt:0,    bot:0,   heart:0, col:[160,200,230]},
-    wink:     {label:'Kedip', w:1,    h:1.15, top:0,   tilt:0,    bot:0,   heart:0, wink:1, col:[255,220,120]},
-    dizzy:    {label:'Pusing',  w:1,    h:1,    top:0,   tilt:0,    bot:0,   heart:0, col:[200,160,255]}
+    normal:   {label:'Biasa', icon:'', w:1,    h:1.15, top:0,   tilt:0,    bot:0,   heart:0, col:[127,232,255]},
+    happy:    {label:'Senang', icon:'', w:1.05, h:1,    top:0,   tilt:0,    bot:.62, heart:0, col:[140,255,190]},
+    angry:    {label:'Marah', icon:'', w:1,    h:1,    top:.08, tilt:.45,  bot:0,   heart:0, col:[255,110,90]},
+    sad:      {label:'Sedih', icon:'', w:.95,  h:1.1,  top:.05, tilt:-.45, bot:0,   heart:0, col:[130,170,255]},
+    surprised:{label:'Kaget', icon:'', w:.8,   h:1.45, top:0,   tilt:0,    bot:0,   heart:0, col:[255,255,255]},
+    love:     {label:'Cinta', icon:'', w:1,    h:1,    top:0,   tilt:0,    bot:0,   heart:1, col:[255,93,143]},
+    sleepy:   {label:'Ngantuk', icon:'', w:1.1,  h:.8,   top:.55, tilt:0,    bot:0,   heart:0, col:[160,200,230]},
+    wink:     {label:'Kedip', icon:'', w:1,    h:1.15, top:0,   tilt:0,    bot:0,   heart:0, wink:1, col:[255,220,120]},
+    dizzy:    {label:'Pusing', icon:'',  w:1,    h:1,    top:0,   tilt:0,    bot:0,   heart:0, col:[200,160,255]}
   };
   var KEYS = ['w','h','top','tilt','bot','heart','wink'];
   var cur = JSON.parse(JSON.stringify(MOODS.normal)), tgt = MOODS.normal;
