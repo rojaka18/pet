@@ -37,15 +37,15 @@
   var BG = '#05070a', W = 0, H = 0, dpr = 1;
 
   var MOODS = {
-    normal:   {label:'Biasa',   icon:'😐', w:1,    h:1.15, top:0,   tilt:0,    bot:0,   heart:0, col:[127,232,255]},
-    happy:    {label:'Senang',  icon:'😊', w:1.05, h:1,    top:0,   tilt:0,    bot:.62, heart:0, col:[140,255,190]},
-    angry:    {label:'Marah',   icon:'😠', w:1,    h:1,    top:.08, tilt:.45,  bot:0,   heart:0, col:[255,110,90]},
-    sad:      {label:'Sedih',   icon:'😢', w:.95,  h:1.1,  top:.05, tilt:-.45, bot:0,   heart:0, col:[130,170,255]},
-    surprised:{label:'Kaget',   icon:'😲', w:.8,   h:1.45, top:0,   tilt:0,    bot:0,   heart:0, col:[255,255,255]},
-    love:     {label:'Cinta',   icon:'😍', w:1,    h:1,    top:0,   tilt:0,    bot:0,   heart:1, col:[255,93,143]},
-    sleepy:   {label:'Ngantuk', icon:'😴', w:1.1,  h:.8,   top:.55, tilt:0,    bot:0,   heart:0, col:[160,200,230]},
-    wink:     {label:'Kedip',   icon:'😉', w:1,    h:1.15, top:0,   tilt:0,    bot:0,   heart:0, wink:1, col:[255,220,120]},
-    dizzy:    {label:'Pusing',  icon:'😵', w:1,    h:1,    top:0,   tilt:0,    bot:0,   heart:0, col:[200,160,255]}
+    normal:   {label:'Biasa', w:1,    h:1.15, top:0,   tilt:0,    bot:0,   heart:0, col:[127,232,255]},
+    happy:    {label:'Senang', w:1.05, h:1,    top:0,   tilt:0,    bot:.62, heart:0, col:[140,255,190]},
+    angry:    {label:'Marah',  w:1,    h:1,    top:.08, tilt:.45,  bot:0,   heart:0, col:[255,110,90]},
+    sad:      {label:'Sedih', w:.95,  h:1.1,  top:.05, tilt:-.45, bot:0,   heart:0, col:[130,170,255]},
+    surprised:{label:'Kaget', w:.8,   h:1.45, top:0,   tilt:0,    bot:0,   heart:0, col:[255,255,255]},
+    love:     {label:'Cinta', w:1,    h:1,    top:0,   tilt:0,    bot:0,   heart:1, col:[255,93,143]},
+    sleepy:   {label:'Ngantuk', w:1.1,  h:.8,   top:.55, tilt:0,    bot:0,   heart:0, col:[160,200,230]},
+    wink:     {label:'Kedip', w:1,    h:1.15, top:0,   tilt:0,    bot:0,   heart:0, wink:1, col:[255,220,120]},
+    dizzy:    {label:'Pusing',  w:1,    h:1,    top:0,   tilt:0,    bot:0,   heart:0, col:[200,160,255]}
   };
   var KEYS = ['w','h','top','tilt','bot','heart','wink'];
   var cur = JSON.parse(JSON.stringify(MOODS.normal)), tgt = MOODS.normal;
@@ -113,16 +113,55 @@
     b.addEventListener('click', function(e){ e.stopPropagation(); fn(b); showBar(); });
     bar.appendChild(b);
   }
-  toggle('🔊 Suara', function(b){ sound = !sound; b.textContent = sound ? '🔊 Suara' : '🔇 Senyap'; });
-  toggle('🕒 Jam', function(b){ clockOn = !clockOn; b.classList.toggle('on', clockOn); });
-  toggle('👁 Gaya mata', function(){ var L = ['buddy','robot','cute','box']; STYLE = L[(L.indexOf(STYLE) + 1) % 4]; });
-  toggle('☁️ Cuaca', function(){ announce(); });
-  toggle('🍅 Fokus', function(b){
+  toggle('Suara', function(b){ sound = !sound; b.textContent = sound ? '🔊 Suara' : '🔇 Senyap'; });
+  toggle('Jam', function(b){ clockOn = !clockOn; b.classList.toggle('on', clockOn); });
+  toggle('Gaya mata', function(){ var L = ['buddy','robot','cute','box']; STYLE = L[(L.indexOf(STYLE) + 1) % 4]; });
+  toggle('Cuaca', function(){ announce(); });
+  toggle('Fokus', function(b){
     if (P.mode === 'off'){ P = {mode:'focus', end:Date.now() + 25 * 60000, n:0}; setBase('normal'); b.classList.add('on'); say('Oke, fokus 25 menit. Aku jagain!', 'happy', 4000); }
     else { P = {mode:'off', end:0, n:0}; b.classList.remove('on'); setBase('normal'); say('Fokus dihentikan', 'normal', 2500); }
   });
-  toggle('📊 Aku', function(){ say('Dielus ' + MEM.pokes + 'x · Sayang ' + Math.round(MEM.aff) + '%', MEM.aff > 60 ? 'love' : MEM.aff < 30 ? 'sad' : 'happy', 4500); });
-  toggle('🎤 Bicara', function(){ listen(); });
+  toggle('Aku', function(){ say('Dielus ' + MEM.pokes + 'x · Sayang ' + Math.round(MEM.aff) + '%', MEM.aff > 60 ? 'love' : MEM.aff < 30 ? 'sad' : 'happy', 4500); });
+  toggle(' Bicara', function(){ listen(); });
+  /* antrean seragam DepoQ */
+var Q = {url:'', token:'', on:false}, qSince = -1, qWait = 0, qBusy = false;
+try { var q0 = JSON.parse(localStorage.getItem('buddy_q') || 'null'); if (q0) Q = q0; } catch(e){}
+function saveQ(){ try { localStorage.setItem('buddy_q', JSON.stringify(Q)); } catch(e){} }
+function qUI(){ qBtn.textContent = 'Antrean: ' + (Q.on ? 'nyala' : 'mati'); qBtn.classList.toggle('on', Q.on); }
+function setupQ(){
+  var u = prompt('URL web app DepoQ (berakhiran /exec):', Q.url || ''); if (u === null) return;
+  var t = prompt('Token:', Q.token || ''); if (t === null) return;
+  Q.url = u.trim(); Q.token = t.trim(); Q.on = !!(Q.url && Q.token); qSince = -1; saveQ(); qUI();
+  if (Q.on) pollQ();
+}
+function qNotify(list){
+  lastTouch = Date.now(); clearTimers();
+  say(list.length > 1 ? list.length + ' antrean seragam baru' : 'Antrean seragam: ' + list[0].no + ' · ' + list[0].nama, null, 8000);
+  tgt = MOODS.surprised;
+  timers.push(setTimeout(function(){ tgt = MOODS.happy; timers.push(setTimeout(function(){ tgt = MOODS[base]; }, 2400)); }, 600));
+  tone(784, 1047, .12); setTimeout(function(){ tone(1047, 1319, .16); }, 160);
+}
+function pollQ(){
+  if (!Q.on || !Q.url || !Q.token || qBusy || document.hidden) return;
+  qBusy = true;
+  fetch(Q.url + (Q.url.indexOf('?') > -1 ? '&' : '?') + 'action=buddy&token=' + encodeURIComponent(Q.token) + '&since=' + Math.max(qSince, 0), {cache:'no-store'})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.error) return;
+      qWait = d.menunggu;
+      if (qSince < 0){ qSince = d.maxId; return; }   // polling pertama: abaikan antrean lama
+      if (d.maxId < qSince) qSince = d.maxId;        // ganti hari / nomor reset
+      if (d.baru && d.baru.length){ d.baru.forEach(function(x){ if (x.id > qSince) qSince = x.id; }); qNotify(d.baru); }
+    })
+    .catch(function(){})
+    .then(function(){ qBusy = false; });
+}
+toggle('Antrean', function(){ if (!Q.url || !Q.token) setupQ(); else { Q.on = !Q.on; qSince = -1; saveQ(); } qUI(); });
+var qBtn = bar.lastChild;
+toggle('Atur antrean', function(){ setupQ(); });
+qUI();
+setInterval(pollQ, 10000); setTimeout(pollQ, 1500);
+document.addEventListener('visibilitychange', function(){ if (!document.hidden) pollQ(); });
   setBase('normal');
 
   var barTimer;
@@ -444,6 +483,11 @@
       ctx.textAlign = 'center';
       ctx.fillText(s, W/2, Math.min(H - 24, cy + u * 1.05));
       ctx.textAlign = 'start';
+    }
+
+    if (Q.on && Q.url){
+    ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.font = '14px "Trebuchet MS", sans-serif';
+    ctx.textAlign = 'right'; ctx.fillText('Antrean seragam: ' + qWait, W - 16, H - 18); ctx.textAlign = 'start';  
     }
 
     if (tgt === MOODS.sleepy){
