@@ -37,19 +37,25 @@
   var BG = '#05070a', W = 0, H = 0, dpr = 1;
 
   var MOODS = {
-    normal:   {label:'Biasa', icon:'', w:1,    h:1.15, top:0,   tilt:0,    bot:0,   heart:0, col:[127,232,255]},
-    happy:    {label:'Senang', icon:'', w:1.05, h:1,    top:0,   tilt:0,    bot:.62, heart:0, col:[140,255,190]},
-    angry:    {label:'Marah', icon:'', w:1,    h:1,    top:.08, tilt:.45,  bot:0,   heart:0, col:[255,110,90]},
-    sad:      {label:'Sedih', icon:'', w:.95,  h:1.1,  top:.05, tilt:-.45, bot:0,   heart:0, col:[130,170,255]},
-    surprised:{label:'Kaget', icon:'', w:.8,   h:1.45, top:0,   tilt:0,    bot:0,   heart:0, col:[255,255,255]},
-    love:     {label:'Cinta', icon:'', w:1,    h:1,    top:0,   tilt:0,    bot:0,   heart:1, col:[255,93,143]},
-    sleepy:   {label:'Ngantuk', icon:'', w:1.1,  h:.8,   top:.55, tilt:0,    bot:0,   heart:0, col:[160,200,230]},
-    wink:     {label:'Kedip', icon:'', w:1,    h:1.15, top:0,   tilt:0,    bot:0,   heart:0, wink:1, col:[255,220,120]},
-    dizzy:    {label:'Pusing', icon:'',  w:1,    h:1,    top:0,   tilt:0,    bot:0,   heart:0, col:[200,160,255]}
+    normal:   {label:'Biasa', w:1,    h:1.15, top:0,   tilt:0,    bot:0,   heart:0, col:[127,232,255]},
+    happy:    {label:'Senang', w:1.05, h:1,    top:0,   tilt:0,    bot:.62, heart:0, col:[140,255,190]},
+    angry:    {label:'Marah', w:1,    h:1,    top:.08, tilt:.45,  bot:0,   heart:0, col:[255,110,90]},
+    sad:      {label:'Sedih', w:.95,  h:1.1,  top:.05, tilt:-.45, bot:0,   heart:0, col:[130,170,255]},
+    surprised:{label:'Kaget', w:.8,   h:1.45, top:0,   tilt:0,    bot:0,   heart:0, col:[255,255,255]},
+    love:     {label:'Cinta', w:1,    h:1,    top:0,   tilt:0,    bot:0,   heart:1, col:[255,93,143]},
+    sleepy:   {label:'Ngantuk', w:1.1,  h:.8,   top:.55, tilt:0,    bot:0,   heart:0, col:[160,200,230]},
+    wink:     {label:'Kedip', w:1,    h:1.15, top:0,   tilt:0,    bot:0,   heart:0, wink:1, col:[255,220,120]},
+    dizzy:    {label:'Pusing', w:1,    h:1,    top:0,   tilt:0,    bot:0,   heart:0, col:[200,160,255]},
+    suspicious:{label:'Curiga', w:1.1, h:.8,  top:.3,  tilt:0,   bot:.25, heart:0, col:[255,200,120]},
+    cry:      {label:'Nangis', w:1,   h:1.1, top:.05, tilt:-.45,bot:0,   heart:0, cry:1,  col:[110,180,255]},
+    stars:    {label:'Bintang',w:1,   h:1,   top:0,   tilt:0,   bot:0,   heart:0, star:1, col:[255,230,100]},
+    confused: {label:'Bingung',w:1,   h:1.1, top:0,   tilt:.15, bot:0,   heart:0, wink:.35, col:[200,255,160]},
+    sulk:     {label:'Ngambek',w:1.05,h:.9,  top:.38, tilt:.2,  bot:0,   heart:0, col:[255,150,120]},
+    sneeze:   {hidden:1, label:'', w:1, h:.9, top:.45, tilt:0, bot:.45, heart:0, col:[255,255,255]}
   };
-  var KEYS = ['w','h','top','tilt','bot','heart','wink'];
+  var KEYS = ['w','h','top','tilt','bot','heart','wink','star','cry'];
   var cur = JSON.parse(JSON.stringify(MOODS.normal)), tgt = MOODS.normal;
-  cur.wink = 0;
+  cur.wink = 0; cur.star = 0; cur.cry = 0;
   var AC = null, sound = true, clockOn = false, STYLE = 'buddy';
   function tone(f1, f2, d, type){
     if (!AC || !sound) return;
@@ -61,7 +67,8 @@
       o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + d + .02);
     } catch(e){}
   }
-  var SFX = {normal:[400,500,.08], happy:[600,1000,.14], angry:[160,90,.25,'sawtooth'], sad:[500,250,.35], surprised:[500,1300,.12], love:[500,900,.3], sleepy:[300,150,.5], wink:[800,1200,.07], dizzy:[300,700,.4,'triangle']};
+  var SFX = {normal:[400,500,.08], happy:[600,1000,.14], angry:[160,90,.25,'sawtooth'], sad:[500,250,.35], surprised:[500,1300,.12], love:[500,900,.3], sleepy:[300,150,.5], wink:[800,1200,.07], dizzy:[300,700,.4,'triangle'],
+    suspicious:[300,300,.2], cry:[500,200,.5], stars:[800,1500,.2], confused:[400,600,.2,'triangle'], sulk:[200,150,.3]};
   function sfx(m){ var s = SFX[m]; if (s) tone(s[0], s[1], s[2], s[3]); }
   var base = 'normal', look = {x:0,y:0}, lookT = {x:0,y:0};
   var blink = -1, lastTouch = Date.now(), timers = [];
@@ -86,11 +93,12 @@
 
   /* toolbar */
   Object.keys(MOODS).forEach(function(k){
+    if (MOODS[k].hidden) return;
     var b = document.createElement('button');
     b.dataset.m = k; b.type = 'button';
-    b.textContent = MOODS[k].icon + ' ' + MOODS[k].label;
+    b.textContent = MOODS[k].label;
     b.addEventListener('pointerdown', function(e){ e.stopPropagation(); });
-    b.addEventListener('click', function(e){ e.stopPropagation(); clearTimers(); setBase(k); showBar(); });
+    b.addEventListener('click', function(e){ e.stopPropagation(); clearTimers(); setBase(k); twSend(k, ''); showBar(); });
     bar.appendChild(b);
   });
   var fs = document.createElement('button');
@@ -122,46 +130,107 @@
     else { P = {mode:'off', end:0, n:0}; b.classList.remove('on'); setBase('normal'); say('Fokus dihentikan', 'normal', 2500); }
   });
   toggle('Aku', function(){ say('Dielus ' + MEM.pokes + 'x · Sayang ' + Math.round(MEM.aff) + '%', MEM.aff > 60 ? 'love' : MEM.aff < 30 ? 'sad' : 'happy', 4500); });
-  toggle(' Bicara', function(){ listen(); });
+  toggle('Bicara', function(){ listen(); });
+
   /* antrean seragam DepoQ */
-var Q = {url:'', token:'', on:false}, qSince = -1, qWait = 0, qBusy = false;
-try { var q0 = JSON.parse(localStorage.getItem('buddy_q') || 'null'); if (q0) Q = q0; } catch(e){}
-function saveQ(){ try { localStorage.setItem('buddy_q', JSON.stringify(Q)); } catch(e){} }
-function qUI(){ qBtn.textContent = 'Antrean: ' + (Q.on ? 'nyala' : 'mati'); qBtn.classList.toggle('on', Q.on); }
-function setupQ(){
-  var u = prompt('URL web app DepoQ (berakhiran /exec):', Q.url || ''); if (u === null) return;
-  var t = prompt('Token:', Q.token || ''); if (t === null) return;
-  Q.url = u.trim(); Q.token = t.trim(); Q.on = !!(Q.url && Q.token); qSince = -1; saveQ(); qUI();
-  if (Q.on) pollQ();
-}
-function qNotify(list){
-  lastTouch = Date.now(); clearTimers();
-  say(list.length > 1 ? list.length + ' antrean seragam baru' : 'Antrean seragam: ' + list[0].no + ' · ' + list[0].nama, null, 8000);
-  tgt = MOODS.surprised;
-  timers.push(setTimeout(function(){ tgt = MOODS.happy; timers.push(setTimeout(function(){ tgt = MOODS[base]; }, 2400)); }, 600));
-  tone(784, 1047, .12); setTimeout(function(){ tone(1047, 1319, .16); }, 160);
-}
-function pollQ(){
-  if (!Q.on || !Q.url || !Q.token || qBusy || document.hidden) return;
-  qBusy = true;
-  fetch(Q.url + (Q.url.indexOf('?') > -1 ? '&' : '?') + 'action=buddy&token=' + encodeURIComponent(Q.token) + '&since=' + Math.max(qSince, 0), {cache:'no-store'})
-    .then(function(r){ return r.json(); })
-    .then(function(d){
+  var Q = {url:'', token:'', on:false}, qSince = -1, qWait = 0, qBusy = false;
+  try { var q0 = JSON.parse(localStorage.getItem('buddy_q') || 'null'); if (q0) Q = q0; } catch(e){}
+  function saveQ(){ try { localStorage.setItem('buddy_q', JSON.stringify(Q)); } catch(e){} }
+  function qUI(){ qBtn.textContent = 'Antrean: ' + (Q.on ? 'nyala' : 'mati'); qBtn.classList.toggle('on', Q.on); }
+  function setupQ(){
+    var u = prompt('URL web app DepoQ (berakhiran /exec):', Q.url || ''); if (u === null) return;
+    var t = prompt('Token:', Q.token || ''); if (t === null) return;
+    Q.url = u.trim(); Q.token = t.trim(); Q.on = !!(Q.url && Q.token); qSince = -1; saveQ(); qUI();
+    if (Q.on) pollQ();
+  }
+  function qNotify(list){
+    lastTouch = Date.now(); clearTimers();
+    say(list.length > 1 ? list.length + ' antrean seragam baru' : 'Antrean seragam: ' + list[0].no + ' · ' + list[0].nama, null, 8000);
+    tgt = MOODS.surprised;
+    timers.push(setTimeout(function(){ tgt = MOODS.happy; timers.push(setTimeout(function(){ tgt = MOODS[base]; }, 2400)); }, 600));
+    tone(784, 1047, .12); setTimeout(function(){ tone(1047, 1319, .16); }, 160);
+  }
+  function pollQ(){
+    if (!Q.on || !Q.url || !Q.token || qBusy || document.hidden) return;
+    qBusy = true;
+    fetch(Q.url + (Q.url.indexOf('?') > -1 ? '&' : '?') + 'action=buddy&token=' + encodeURIComponent(Q.token) + '&since=' + Math.max(qSince, 0), {cache:'no-store'})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (d.error) return;
+        qWait = d.menunggu;
+        if (qSince < 0){ qSince = d.maxId; return; }   // polling pertama: abaikan antrean lama
+        if (d.maxId < qSince){ qSince = 0; return; }   // ganti hari / nomor reset
+        if (d.baru && d.baru.length){ d.baru.forEach(function(x){ if (x.id > qSince) qSince = x.id; }); qNotify(d.baru); }
+      })
+      .catch(function(){})
+      .then(function(){ qBusy = false; });
+  }
+  toggle('Antrean', function(){ if (!Q.url || !Q.token) setupQ(); else { Q.on = !Q.on; qSince = -1; saveQ(); } qUI(); });
+  var qBtn = bar.lastChild;
+  toggle('Atur antrean', function(){ setupQ(); });
+  qUI();
+  setInterval(pollQ, 10000); setTimeout(pollQ, 1500);
+  document.addEventListener('visibilitychange', function(){ if (!document.hidden) pollQ(); });
+
+  /* Buddy kembar (dua HP saling kirim sapaan dan ekspresi lewat Apps Script terpisah) */
+  var TW = {url:'', token:'', id:'', on:false}, tSince = -1, tBusy = false, twBtn;
+  try { var t0 = JSON.parse(localStorage.getItem('buddy_tw') || 'null'); if (t0) TW = t0; } catch(e){}
+  if (!TW.id) TW.id = 'b' + Math.random().toString(36).slice(2, 7);
+  function saveTW(){ try { localStorage.setItem('buddy_tw', JSON.stringify(TW)); } catch(e){} }
+  function twUI(){ twBtn.textContent = 'Kembar: ' + (TW.on ? 'nyala' : 'mati'); twBtn.classList.toggle('on', TW.on); }
+  function twCall(params){
+    var u = TW.url + (TW.url.indexOf('?') > -1 ? '&' : '?') + 'token=' + encodeURIComponent(TW.token);
+    for (var k in params) u += '&' + k + '=' + encodeURIComponent(params[k]);
+    return fetch(u, {cache:'no-store'}).then(function(r){ return r.json(); });
+  }
+  function twSend(mood, text){
+    if (!TW.on) return;
+    twCall({action:'send', fid:TW.id, nama:MEM.name || 'teman', mood:mood || '', text:text || ''}).catch(function(){});
+  }
+  function setupTW(){
+    var u = prompt('URL web app Buddy kembar (berakhiran /exec):', TW.url || ''); if (u === null) return;
+    var t = prompt('Token:', TW.token || ''); if (t === null) return;
+    TW.url = u.trim(); TW.token = t.trim(); TW.on = !!(TW.url && TW.token); tSince = -1; saveTW(); twUI();
+    if (TW.on) pollTW();
+  }
+  function twNotify(x){
+    lastTouch = Date.now(); clearTimers();
+    var m = (MOODS[x.mood] && !MOODS[x.mood].hidden) ? x.mood : 'happy';
+    say(x.text ? x.nama + ': ' + x.text : x.nama + ' menyapa', m, 6000);
+    tone(660, 990, .1); setTimeout(function(){ tone(990, 1320, .14); }, 140);
+  }
+  function pollTW(){
+    if (!TW.on || tBusy || document.hidden) return;
+    tBusy = true;
+    twCall({action:'poll', fid:TW.id, since:Math.max(tSince, 0)}).then(function(d){
       if (d.error) return;
-      qWait = d.menunggu;
-      if (qSince < 0){ qSince = d.maxId; return; }   // polling pertama: abaikan antrean lama
-      if (d.maxId < qSince){ qSince = 0; return; }   // ganti hari / nomor reset   // ganti hari / nomor reset
-      if (d.baru && d.baru.length){ d.baru.forEach(function(x){ if (x.id > qSince) qSince = x.id; }); qNotify(d.baru); }
-    })
-    .catch(function(){})
-    .then(function(){ qBusy = false; });
-}
-toggle('Antrean', function(){ if (!Q.url || !Q.token) setupQ(); else { Q.on = !Q.on; qSince = -1; saveQ(); } qUI(); });
-var qBtn = bar.lastChild;
-toggle('Atur antrean', function(){ setupQ(); });
-qUI();
-setInterval(pollQ, 10000); setTimeout(pollQ, 1500);
-document.addEventListener('visibilitychange', function(){ if (!document.hidden) pollQ(); });
+      if (tSince < 0){ tSince = d.maxId; return; }   // polling pertama: abaikan pesan lama
+      if (d.maxId < tSince){ tSince = 0; return; }
+      if (d.baru && d.baru.length){
+        d.baru.forEach(function(x){ if (x.id > tSince) tSince = x.id; });
+        twNotify(d.baru[d.baru.length - 1]);
+      }
+    }).catch(function(){}).then(function(){ tBusy = false; });
+  }
+  toggle('Kembar', function(){ if (!TW.url || !TW.token) setupTW(); else { TW.on = !TW.on; tSince = -1; saveTW(); } twUI(); });
+  twBtn = bar.lastChild;
+  toggle('Sapa kembar', function(){
+    if (!TW.on){ say('Nyalakan Kembar dulu', 'normal', 2000); return; }
+    twSend(base === 'sleepy' ? 'normal' : base, 'halo'); say('Sapaan terkirim', 'wink', 1800);
+  });
+  toggle('Atur kembar', function(){ setupTW(); });
+  twUI();
+  setInterval(pollTW, 10000); setTimeout(pollTW, 2000);
+  document.addEventListener('visibilitychange', function(){ if (!document.hidden) pollTW(); });
+
+  toggle('Tepuk: mati', function(b){
+    if (CL.on){ CL.on = false; clapStop(); b.textContent = 'Tepuk: mati'; b.classList.remove('on'); }
+    else clapStart().then(function(ok){ CL.on = ok; b.textContent = 'Tepuk: ' + (ok ? 'nyala' : 'mati'); b.classList.toggle('on', ok); });
+  });
+  toggle('Intip: mati', function(b){
+    if (CAM.on){ CAM.on = false; camStop(); b.textContent = 'Intip: mati'; b.classList.remove('on'); }
+    else camStart().then(function(ok){ CAM.on = ok; b.textContent = 'Intip: ' + (ok ? 'nyala' : 'mati'); b.classList.toggle('on', ok); });
+  });
   setBase('normal');
 
   var barTimer;
@@ -329,89 +398,135 @@ document.addEventListener('visibilitychange', function(){ if (!document.hidden) 
     var m = Math.abs(a.x || 0) + Math.abs(a.y || 0) + Math.abs(a.z || 0);
     if (m > 40 && tgt !== MOODS.dizzy){ lastTouch = Date.now(); clearTimers(); temp('dizzy', 3000); }
   });
-/* ===== ⑤ ketuk meja (akselerometer) ===== */
-var kPrev = 0, kLast = 0, kQuiet = 0, kHits = [], kTimer = 0, touchAt = 0;
-var K_SENS = 1.0;   // makin kecil = makin peka
-window.addEventListener('pointerdown', function(){ touchAt = Date.now(); }, true);
-window.addEventListener('pointerup', function(){ touchAt = Date.now(); }, true);
-window.addEventListener('devicemotion', function(e){
-  var a = e.accelerationIncludingGravity; if (!a || a.z == null) return;
-  var m = Math.sqrt(a.x*a.x + a.y*a.y + a.z*a.z), d = Math.abs(m - kPrev), now = Date.now(), quiet = kQuiet;
-  kPrev = m; if (d < .25) kQuiet++; else kQuiet = 0;
-  if (quiet < 8 || d < K_SENS || d > 12 || now - kLast < 160 || now - touchAt < 600) return;  // harus diam dulu, bukan dipegang/disentuh
-  kLast = now; kHits = kHits.filter(function(t){ return now - t < 1000; }); kHits.push(now);
-  clearTimeout(kTimer); kTimer = setTimeout(knockDone, 650);
-});
-function knockDone(){
-  var n = kHits.length; kHits = []; lastTouch = Date.now();
-  if (n === 2){ lookT.x = Math.random() < .5 ? -1 : 1; lookT.y = 0; say('Siapa itu?', 'surprised', 1800); timers.push(setTimeout(function(){ lookT.x = 0; }, 1500)); }
-  else if (n >= 3){ say('Hehe, ada tamu!', 'happy', 2500); }
-}
 
-/* ===== ⑥ tepuk tangan (mikrofon: hanya ukur volume, tidak merekam) ===== */
-var CL = {on:false, an:null, buf:null, base:.01, last:0, hits:[], iv:0, stream:null};
-function clapStart(){
-  if (!AC){ say('Ketuk layar dulu ya', 'normal', 2000); return Promise.resolve(false); }
-  if (AC.state === 'suspended') AC.resume();
-  return navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false}}).then(function(s){
-    CL.stream = s; CL.an = AC.createAnalyser(); CL.an.fftSize = 512; CL.buf = new Float32Array(512);
-    AC.createMediaStreamSource(s).connect(CL.an); CL.iv = setInterval(clapTick, 30); return true;
-  }).catch(function(){ say('Mikrofon tidak diizinkan', 'sad', 3000); return false; });
-}
-function clapStop(){ clearInterval(CL.iv); if (CL.stream) CL.stream.getTracks().forEach(function(t){ t.stop(); }); CL.stream = null; CL.an = null; }
-function clapTick(){
-  if (!CL.an) return;
-  CL.an.getFloatTimeDomainData(CL.buf);
-  var s = 0, i; for (i = 0; i < CL.buf.length; i++) s += CL.buf[i] * CL.buf[i];
-  var rms = Math.sqrt(s / CL.buf.length), now = Date.now(), peak = rms > Math.max(.12, CL.base * 5);
-  CL.base += (rms - CL.base) * .02;
-  if (!peak || now - CL.last < 180 || now < talkUntil) return;   // abaikan saat Buddy sedang bicara
-  CL.last = now; CL.hits = CL.hits.filter(function(t){ return now - t < 800; }); CL.hits.push(now);
-  if (CL.hits.length >= 2){
-    CL.hits = []; lastTouch = now;
-    say('Eh, ada yang tepuk tangan!', 'surprised', 1200);
-    timers.push(setTimeout(function(){ temp('happy', 2200); }, 1200));
+  /* ketuk meja (akselerometer) */
+  var kPrev = 0, kLast = 0, kQuiet = 0, kHits = [], kTimer = 0, touchAt = 0;
+  var K_SENS = 1.0;   // makin kecil = makin peka
+  window.addEventListener('pointerdown', function(){ touchAt = Date.now(); }, true);
+  window.addEventListener('pointerup', function(){ touchAt = Date.now(); }, true);
+  window.addEventListener('devicemotion', function(e){
+    var a = e.accelerationIncludingGravity; if (!a || a.z == null) return;
+    var m = Math.sqrt(a.x*a.x + a.y*a.y + a.z*a.z), d = Math.abs(m - kPrev), now = Date.now(), quiet = kQuiet;
+    kPrev = m; if (d < .25) kQuiet++; else kQuiet = 0;
+    if (quiet < 8 || d < K_SENS || d > 12 || now - kLast < 160 || now - touchAt < 600) return;  // harus diam dulu, bukan dipegang/disentuh
+    kLast = now; kHits = kHits.filter(function(t){ return now - t < 1000; }); kHits.push(now);
+    clearTimeout(kTimer); kTimer = setTimeout(knockDone, 650);
+  });
+  function knockDone(){
+    var n = kHits.length; kHits = []; lastTouch = Date.now();
+    if (n === 2){ lookT.x = Math.random() < .5 ? -1 : 1; lookT.y = 0; say('Siapa itu?', 'surprised', 1800); timers.push(setTimeout(function(){ lookT.x = 0; }, 1500)); }
+    else if (n >= 3){ say('Hehe, ada tamu!', 'happy', 2500); }
   }
-}
-toggle('Tepuk: mati', function(b){
-  if (CL.on){ CL.on = false; clapStop(); b.textContent = 'Tepuk: mati'; b.classList.remove('on'); }
-  else clapStart().then(function(ok){ CL.on = ok; b.textContent = ' Tepuk: ' + (ok ? 'nyala' : 'mati'); b.classList.toggle('on', ok); });
-});
 
-/* ===== ⑦ intip kamera (deteksi gerakan lokal, gambar tidak disimpan/dikirim) ===== */
-var CAM = {on:false, v:null, c:null, g:null, prev:null, iv:0, stream:null, last:Date.now()};
-function camStart(){
-  return navigator.mediaDevices.getUserMedia({video:{facingMode:'user', width:160, height:120}, audio:false}).then(function(s){
-    CAM.stream = s; CAM.v = document.createElement('video'); CAM.v.muted = true; CAM.v.playsInline = true; CAM.v.srcObject = s; CAM.v.play();
-    CAM.c = document.createElement('canvas'); CAM.c.width = 32; CAM.c.height = 24; CAM.g = CAM.c.getContext('2d', {willReadFrequently:true});
-    CAM.prev = null; CAM.last = Date.now(); CAM.iv = setInterval(camTick, 250); return true;
-  }).catch(function(){ say('Kamera tidak diizinkan', 'sad', 3000); return false; });
-}
-function camStop(){ clearInterval(CAM.iv); if (CAM.stream) CAM.stream.getTracks().forEach(function(t){ t.stop(); }); CAM.stream = null; CAM.prev = null; }
-function camTick(){
-  if (!CAM.v || CAM.v.readyState < 2) return;
-  CAM.g.drawImage(CAM.v, 0, 0, 32, 24);
-  var d = CAM.g.getImageData(0, 0, 32, 24).data, cur = new Uint8Array(768), i, n = 0, sx = 0, sy = 0;
-  for (i = 0; i < 768; i++) cur[i] = (d[i*4] + d[i*4+1] + d[i*4+2]) / 3;
-  if (CAM.prev){ for (i = 0; i < 768; i++){ if (Math.abs(cur[i] - CAM.prev[i]) > 28){ n++; sx += i % 32; sy += (i / 32) | 0; } } }
-  CAM.prev = cur;
-  if (n > 25){                                   // ada gerakan
-    var now = Date.now(), cx = 1 - (sx / n) / 31, cy = (sy / n) / 23;   // x dibalik: kamera depan = cermin
-    lookT.x = (cx - .5) * 2; lookT.y = (cy - .5) * 1.4; lastTouch = now;   // mata mengikuti, dan tidak tidur selama ada orang
-    if (now - CAM.last > 60000){ say('Eh, ada orang!', 'surprised', 1500); timers.push(setTimeout(function(){ temp('happy', 2200); }, 1500)); }
-    CAM.last = now;
+  /* tepuk tangan (mikrofon: hanya ukur volume, tidak merekam) */
+  var CL = {on:false, an:null, buf:null, base:.01, last:0, hits:[], iv:0, stream:null};
+  function clapStart(){
+    if (!AC){ say('Ketuk layar dulu ya', 'normal', 2000); return Promise.resolve(false); }
+    if (AC.state === 'suspended') AC.resume();
+    return navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false}}).then(function(s){
+      CL.stream = s; CL.an = AC.createAnalyser(); CL.an.fftSize = 512; CL.buf = new Float32Array(512);
+      AC.createMediaStreamSource(s).connect(CL.an); CL.iv = setInterval(clapTick, 30); return true;
+    }).catch(function(){ say('Mikrofon tidak diizinkan', 'sad', 3000); return false; });
   }
-}
-toggle('👀 Intip: mati', function(b){
-  if (CAM.on){ CAM.on = false; camStop(); b.textContent = '👀 Intip: mati'; b.classList.remove('on'); }
-  else camStart().then(function(ok){ CAM.on = ok; b.textContent = '👀 Intip: ' + (ok ? 'nyala' : 'mati'); b.classList.toggle('on', ok); });
-});
-  
+  function clapStop(){ clearInterval(CL.iv); if (CL.stream) CL.stream.getTracks().forEach(function(t){ t.stop(); }); CL.stream = null; CL.an = null; }
+  function clapTick(){
+    if (!CL.an) return;
+    CL.an.getFloatTimeDomainData(CL.buf);
+    var s = 0, i; for (i = 0; i < CL.buf.length; i++) s += CL.buf[i] * CL.buf[i];
+    var rms = Math.sqrt(s / CL.buf.length), now = Date.now(), peak = rms > Math.max(.12, CL.base * 5);
+    CL.base += (rms - CL.base) * .02;
+    if (!peak || now - CL.last < 180 || now < talkUntil) return;   // abaikan saat Buddy sedang bicara
+    CL.last = now; CL.hits = CL.hits.filter(function(t){ return now - t < 800; }); CL.hits.push(now);
+    if (CL.hits.length >= 2){
+      CL.hits = []; lastTouch = now;
+      say('Eh, ada yang tepuk tangan!', 'surprised', 1200);
+      timers.push(setTimeout(function(){ temp('happy', 2200); }, 1200));
+    }
+  }
+
+  /* intip kamera (deteksi gerakan lokal, gambar tidak disimpan/dikirim) */
+  var CAM = {on:false, v:null, c:null, g:null, prev:null, iv:0, stream:null, last:Date.now()};
+  function camStart(){
+    return navigator.mediaDevices.getUserMedia({video:{facingMode:'user', width:160, height:120}, audio:false}).then(function(s){
+      CAM.stream = s; CAM.v = document.createElement('video'); CAM.v.muted = true; CAM.v.playsInline = true; CAM.v.srcObject = s; CAM.v.play();
+      CAM.c = document.createElement('canvas'); CAM.c.width = 32; CAM.c.height = 24; CAM.g = CAM.c.getContext('2d', {willReadFrequently:true});
+      CAM.prev = null; CAM.last = Date.now(); CAM.iv = setInterval(camTick, 250); return true;
+    }).catch(function(){ say('Kamera tidak diizinkan', 'sad', 3000); return false; });
+  }
+  function camStop(){ clearInterval(CAM.iv); if (CAM.stream) CAM.stream.getTracks().forEach(function(t){ t.stop(); }); CAM.stream = null; CAM.prev = null; }
+  function camTick(){
+    if (!CAM.v || CAM.v.readyState < 2) return;
+    CAM.g.drawImage(CAM.v, 0, 0, 32, 24);
+    var d = CAM.g.getImageData(0, 0, 32, 24).data, cur = new Uint8Array(768), i, n = 0, sx = 0, sy = 0;
+    for (i = 0; i < 768; i++) cur[i] = (d[i*4] + d[i*4+1] + d[i*4+2]) / 3;
+    if (CAM.prev){ for (i = 0; i < 768; i++){ if (Math.abs(cur[i] - CAM.prev[i]) > 28){ n++; sx += i % 32; sy += (i / 32) | 0; } } }
+    CAM.prev = cur;
+    if (n > 170){ camNear = Date.now(); if (camNear - nearSay > 20000){ nearSay = camNear; say('Ih, deket banget!', 'surprised', 1800); } }   // kepo jarak
+    if (n > 25){                                   // ada gerakan
+      var now = Date.now(), cx = 1 - (sx / n) / 31, cy = (sy / n) / 23;   // x dibalik: kamera depan = cermin
+      lookT.x = (cx - .5) * 2; lookT.y = (cy - .5) * 1.4; lastTouch = now;   // mata mengikuti, dan tidak tidur selama ada orang
+      if (now - CAM.last > 60000){ say('Eh, ada orang!', 'surprised', 1500); timers.push(setTimeout(function(){ temp('happy', 2200); }, 1500)); }
+      CAM.last = now;
+    }
+  }
+
+  /* Batch A: kebiasaan iseng */
+  var fly = {until:0}, widen = 0, camNear = 0, nearSay = 0;
+  function yawn(){ clearTimers(); say('Hoaaam...', null, 2200); tone(300, 150, .9); tgt = MOODS.sleepy; timers.push(setTimeout(function(){ tgt = MOODS[base]; }, 2200)); }
+  function sneeze(){
+    clearTimers(); say('Hah... hah...', 'surprised', 900);
+    timers.push(setTimeout(function(){
+      say('HACHIM!', null, 1200); tgt = MOODS.sneeze; tone(900, 200, .18, 'sawtooth');
+      timers.push(setTimeout(function(){ tgt = MOODS[base]; }, 1200));
+    }, 900));
+  }
+  setInterval(function(){
+    if (down || P.mode === 'focus' || base !== 'normal' || tgt !== MOODS.normal || Date.now() - lastTouch < 8000) return;
+    var r = Math.random();
+    if (r < .4) fly.until = Date.now() + 3500; else if (r < .7) yawn(); else sneeze();
+  }, 22000);
+
+  /* Batch B: kemiringan, angkat/taruh, telungkup */
+  var TS = /iPhone|iPad|iPod/.test(navigator.userAgent) ? -1 : 1;   // sumbu iOS terbalik; kalau arah mata terbalik, ubah jadi -TS
+  var tilt = {on:false}, still = 0, lc = 0, calmAt = 0, lifted = false, liftAt = 0, fd = 0, isDown = false;
+  function clamp1(v){ return Math.max(-1, Math.min(1, v)); }
+  window.addEventListener('devicemotion', function(e){
+    var a = e.accelerationIncludingGravity; if (!a || a.z == null) return;
+    var now = Date.now(), ang = (((screen.orientation && screen.orientation.angle) || window.orientation || 0) + 360) % 360, sx, sy;
+    if (ang === 90){ sx = TS*a.y; sy = TS*a.x; } else if (ang === 270){ sx = -TS*a.y; sy = -TS*a.x; }
+    else if (ang === 180){ sx = TS*a.x; sy = -TS*a.y; } else { sx = -TS*a.x; sy = TS*a.y; }
+    var m = Math.sqrt(a.x*a.x + a.y*a.y + a.z*a.z), dev = Math.abs(m - 9.8);
+
+    /* telungkup: gelap, lalu tidur */
+    var f = TS * a.z < -7;
+    fd = f ? fd + 1 : 0;
+    if (fd === 25 && !isDown && now - touchAt > 800){
+      isDown = true; clearTimers(); say('Gelap!', 'surprised', 1500);
+      timers.push(setTimeout(function(){ if (isDown) setBase('sleepy'); }, 1600));
+    } else if (!f && isDown){
+      isDown = false; clearTimers(); setBase('normal'); say('Terang! Halo lagi', 'happy', 2500);
+    }
+    if (isDown) return;
+
+    /* diangkat: kaget, ditaruh: lega */
+    still = dev < .4 ? still + 1 : 0; if (still >= 30) calmAt = now;
+    lc = (dev > 2.5 && dev < 20) ? lc + 1 : 0;   // naikkan 2.5 kalau terlalu gampang kaget
+    if (!lifted && lc >= 5 && now - calmAt < 800 && now - touchAt > 600){
+      lifted = true; liftAt = now; clearTimers(); say('Waaah!', 'surprised', 1800);
+    } else if (lifted && still >= 30 && now - liftAt > 800){
+      lifted = false; clearTimers(); say('Fiuh, lega...', 'happy', 2500);
+    }
+
+    /* mata meluncur ikut kemiringan (hanya saat HP kira-kira rebah di meja) */
+    tilt.on = !down && !lifted && now >= fly.until && Math.abs(a.z) > 4 && (Math.abs(sx) > 1.2 || Math.abs(sy) > 1.2);
+    if (tilt.on){ lookT.x = clamp1(sx / 4); lookT.y = clamp1(sy / 4) * .7; }
+  });
+
   /* idle life */
   function nextBlink(){ setTimeout(function(){ if (blink < 0) blink = 0; if (Math.random() < .2) setTimeout(function(){ blink = 0; }, 260); nextBlink(); }, 1800 + Math.random()*3800); }
   function nextGlance(){
     setTimeout(function(){
-      if (!down){
+      if (!down && !tilt.on){
         var r = Math.random();
         if (r < .3){ lookT.x = 0; lookT.y = 0; }
         else { lookT.x = (Math.random()*2 - 1) * .9; lookT.y = (Math.random()*2 - 1) * .6; }
@@ -444,6 +559,11 @@ toggle('👀 Intip: mati', function(b){
     ctx.bezierCurveTo(s*.55, -s*.6, s*.85, -s*.05, 0, s*.42);
     ctx.closePath();
   }
+  function star(s){
+    ctx.beginPath();
+    for (var i = 0; i < 10; i++){ var r = i % 2 ? s*.22 : s*.55, an = -Math.PI/2 + i*Math.PI/5; ctx.lineTo(Math.cos(an)*r, Math.sin(an)*r); }
+    ctx.closePath();
+  }
   function eye(cx, cy, ew, eh, inner, rgb, t){
     if (STYLE === 'buddy') rgb = [110,225,255];
     var col = 'rgb(' + (rgb[0]|0) + ',' + (rgb[1]|0) + ',' + (rgb[2]|0) + ')';
@@ -451,7 +571,7 @@ toggle('👀 Intip: mati', function(b){
     ctx.save();
     ctx.translate(cx + look.x * ew * .32, cy + look.y * eh * .22);
     ctx.shadowColor = col; ctx.shadowBlur = (STYLE === 'buddy') ? 0 : ew * .35;
-    var a = 1 - cur.heart;
+    var a = 1 - Math.max(cur.heart, cur.star);
     if (a > .01){
       ctx.globalAlpha = a;
       ctx.save();
@@ -508,6 +628,12 @@ toggle('👀 Intip: mati', function(b){
       ctx.scale(p, p);
       heart(ew * 1.25); ctx.fill();
     }
+    if (cur.star > .01){
+      ctx.globalAlpha = cur.star; ctx.fillStyle = col;
+      var p2 = 1 + Math.sin(t / 140) * .08;
+      ctx.rotate(Math.sin(t / 500) * .15); ctx.scale(p2, p2);
+      star(ew * 1.5); ctx.fill();
+    }
     ctx.restore();
   }
 
@@ -520,16 +646,37 @@ toggle('👀 Intip: mati', function(b){
     look.x += (lookT.x - look.x) * (k * .8); look.y += (lookT.y - look.y) * (k * .8);
 
     if (tgt === MOODS.dizzy){ lookT.x = Math.cos(now / 170); lookT.y = Math.sin(now / 170) * .8; }
+    if (tgt === MOODS.suspicious){ lookT.x = Math.sin(now/900) > 0 ? .9 : -.9; lookT.y = 0; }
+    else if (tgt === MOODS.sulk){ lookT.x = .9; lookT.y = .3; }
+    else if (tgt === MOODS.confused){ lookT.x = Math.sin(now/500) * .7; lookT.y = -.4; }
+    if (Date.now() < fly.until && !down){ lookT.x = Math.cos(now/310) * .9; lookT.y = Math.sin(now/230) * .6; }
+    widen += ((Date.now() - camNear < 900 ? 1 : 0) - widen) * k;
     var close = 0;
     if (blink >= 0){ blink += dt / 190; if (blink >= 1) blink = -1; else close = Math.sin(blink * Math.PI); }
 
     ctx.fillStyle = BG; ctx.fillRect(0, 0, W, H);
     var u = Math.min(W * .27, H * .5);
-    var ew = u * cur.w, eh = u * cur.h * (1 - close * .93);
+    var ew = u * cur.w * (1 + widen * .2), eh = u * cur.h * (1 - close * .93) * (1 + widen * .3);
     var gap = u * .62, cy = H * .5 + (tgt === MOODS.sleepy ? u * .1 : 0);
     var breathe = Math.sin(now / 1400) * u * .015 + (Date.now() < talkUntil ? Math.sin(now / 85) * u * .035 : 0);
     eye(W/2 - (u/2 + gap/2), cy + breathe, ew, eh, 1, cur.col, now);
     eye(W/2 + (u/2 + gap/2), cy + breathe, ew, eh * (1 - cur.wink * .9), -1, cur.col, now);
+
+    if (cur.cry > .05){
+      for (var si = 0; si < 2; si++){
+        var ex = W/2 + (si ? 1 : -1) * (u/2 + gap/2);
+        for (var j = 0; j < 2; j++){
+          var tt = ((now/900) + j*.5 + si*.2) % 1;
+          ctx.globalAlpha = cur.cry * (1 - tt) * .9; ctx.fillStyle = '#8fd0ff';
+          ctx.beginPath(); ctx.ellipse(ex + (j ? 1 : -1) * ew * .2, cy + eh/2 + tt * u * .7, u * .035, u * .055, 0, 0, 6.3); ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+    if (Date.now() < fly.until && !down){
+      ctx.fillStyle = 'rgba(255,255,255,.8)';
+      ctx.fillRect(W/2 + lookT.x * u * 1.6 + Math.sin(now/40) * 3, cy + lookT.y * u * .9 + Math.cos(now/37) * 3, 3, 3);
+    }
 
     if (wText && Date.now() >= msgUntil){
       var ann = Date.now() - wAnnAt < 8000;
@@ -540,7 +687,7 @@ toggle('👀 Intip: mati', function(b){
     if (T.end){
       var tr = Math.max(0, Math.ceil((T.end - Date.now()) / 1000));
       ctx.fillStyle = 'rgba(255,255,255,.45)'; ctx.font = '16px "Trebuchet MS", sans-serif';
-      ctx.fillText('⏱ ' + ('0' + Math.floor(tr / 60)).slice(-2) + ':' + ('0' + tr % 60).slice(-2), 16, H - 18);
+      ctx.fillText('' + ('0' + Math.floor(tr / 60)).slice(-2) + ':' + ('0' + tr % 60).slice(-2), 16, H - 18);
     }
     if (Date.now() < msgUntil){
       ctx.fillStyle = 'rgba(255,255,255,.9)';
@@ -563,8 +710,8 @@ toggle('👀 Intip: mati', function(b){
     }
 
     if (Q.on && Q.url){
-    ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.font = '14px "Trebuchet MS", sans-serif';
-    ctx.textAlign = 'right'; ctx.fillText('Antrean seragam: ' + qWait, W - 16, H - 18); ctx.textAlign = 'start';  
+      ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.font = '14px "Trebuchet MS", sans-serif';
+      ctx.textAlign = 'right'; ctx.fillText('Antrean seragam: ' + qWait, W - 16, H - 18); ctx.textAlign = 'start';
     }
 
     if (tgt === MOODS.sleepy){
@@ -574,6 +721,14 @@ toggle('👀 Intip: mati', function(b){
       ctx.globalAlpha = 1 - z;
       ctx.fillText('z', W/2 + u * 1.4, cy - u * .5 - z * u * .4);
       ctx.globalAlpha = 1;
+      /* gelembung mimpi */
+      var bx = W/2 - u * 1.3, by = cy - u * .7;
+      ctx.strokeStyle = 'rgba(160,200,230,.4)'; ctx.fillStyle = 'rgba(160,200,230,.08)'; ctx.lineWidth = 2;
+      [[.85,-.2,.04],[1.0,-.4,.07]].forEach(function(c){ ctx.beginPath(); ctx.arc(W/2 - u*c[0], cy + u*c[1], u*c[2], 0, 6.3); ctx.fill(); ctx.stroke(); });
+      ctx.beginPath(); ctx.arc(bx, by, u * .24, 0, 6.3); ctx.fill(); ctx.stroke();
+      ctx.save(); ctx.translate(bx, by); ctx.fillStyle = 'rgba(255,255,255,.75)';
+      if (Math.floor(now / 3000) % 2){ star(u * .36); } else { heart(u * .4); }
+      ctx.fill(); ctx.restore();
     }
     requestAnimationFrame(frame);
   }
