@@ -461,7 +461,7 @@
     for (i = 0; i < 768; i++) cur[i] = (d[i*4] + d[i*4+1] + d[i*4+2]) / 3;
     if (CAM.prev){ for (i = 0; i < 768; i++){ if (Math.abs(cur[i] - CAM.prev[i]) > 28){ n++; sx += i % 32; sy += (i / 32) | 0; } } }
     CAM.prev = cur;
-    if (n > 170){ camNear = Date.now(); if (camNear - nearSay > 20000){ nearSay = camNear; say('Ih, deket banget!', 'surprised', 1800); } }   // kepo jarak
+    if (n > 170){ camNear = Date.now(); if (camNear - nearSay > 20000){ nearSay = camNear; say('kedeketan bro', 'surprised', 1800); } }   // kepo jarak
     if (n > 25){                                   // ada gerakan
       var now = Date.now(), cx = 1 - (sx / n) / 31, cy = (sy / n) / 23;   // x dibalik: kamera depan = cermin
       lookT.x = (cx - .5) * 2; lookT.y = (cy - .5) * 1.4; lastTouch = now;   // mata mengikuti, dan tidak tidur selama ada orang
@@ -471,7 +471,7 @@
   }
 
   /* Batch A: kebiasaan iseng */
-  var fly = {until:0}, widen = 0, camNear = 0, nearSay = 0;
+  var fly = {until:0}, widen = 0, camNear = 0, nearSay = 0, sleepSince = 0;
   function yawn(){ clearTimers(); say('Hoaaam...', null, 2200); tone(300, 150, .9); tgt = MOODS.sleepy; timers.push(setTimeout(function(){ tgt = MOODS[base]; }, 2200)); }
   function sneeze(){
     clearTimers(); say('Hah... hah...', 'surprised', 900);
@@ -721,14 +721,31 @@
       ctx.globalAlpha = 1 - z;
       ctx.fillText('z', W/2 + u * 1.4, cy - u * .5 - z * u * .4);
       ctx.globalAlpha = 1;
-      /* gelembung mimpi */
-      var bx = W/2 - u * 1.3, by = cy - u * .7;
-      ctx.strokeStyle = 'rgba(160,200,230,.4)'; ctx.fillStyle = 'rgba(160,200,230,.08)'; ctx.lineWidth = 2;
-      [[.85,-.2,.04],[1.0,-.4,.07]].forEach(function(c){ ctx.beginPath(); ctx.arc(W/2 - u*c[0], cy + u*c[1], u*c[2], 0, 6.3); ctx.fill(); ctx.stroke(); });
-      ctx.beginPath(); ctx.arc(bx, by, u * .24, 0, 6.3); ctx.fill(); ctx.stroke();
-      ctx.save(); ctx.translate(bx, by); ctx.fillStyle = 'rgba(255,255,255,.75)';
-      if (Math.floor(now / 3000) % 2){ star(u * .36); } else { heart(u * .4); }
-      ctx.fill(); ctx.restore();
+    }
+    /* gelembung mimpi: baru muncul setelah tidur lebih dari 2,5 detik (bukan saat menguap) */
+    if (tgt === MOODS.sleepy){ if (!sleepSince) sleepSince = now; } else sleepSince = 0;
+    var grow = sleepSince ? Math.max(0, Math.min(1, (now - sleepSince - 2500) / 700)) : 0;
+    if (grow > 0){
+      var r = u * .24 * grow, bx = W/2 - u * 1.25, by = Math.max(u * .24 + 14, cy - u * .85) + Math.sin(now / 900) * u * .02;
+      var p1x = W/2 - u * .9, p1y = cy - u * .45, p0x = bx + r * .5, p0y = by + r * .9;
+      ctx.strokeStyle = 'rgba(160,200,230,.4)'; ctx.fillStyle = 'rgba(160,200,230,.1)'; ctx.lineWidth = 2;
+      [[.35, .06],[.75, .035]].forEach(function(c){
+        ctx.beginPath(); ctx.arc(p0x + (p1x - p0x) * c[0], p0y + (p1y - p0y) * c[0], u * c[1] * grow, 0, 6.3); ctx.fill(); ctx.stroke();
+      });
+      ctx.beginPath(); ctx.arc(bx, by, r, 0, 6.3); ctx.fill(); ctx.stroke();
+      var ph = ((now - sleepSince) % 3200) / 3200, sc = Math.min(1, ph * 6, (1 - ph) * 6) * grow, si2 = Math.floor((now - sleepSince) / 3200) % 4, rs = u * .24;
+      ctx.save(); ctx.translate(bx, by); ctx.scale(sc, sc);
+      if (si2 === 0){ ctx.fillStyle = 'rgba(255,120,160,.9)'; heart(rs * 1.5); ctx.fill(); }
+      else if (si2 === 1){ ctx.fillStyle = 'rgba(255,230,120,.95)'; ctx.rotate(Math.sin(now / 400) * .2); star(rs * 1.7); ctx.fill(); }
+      else if (si2 === 2){
+        ctx.fillStyle = 'rgba(230,240,255,.9)'; ctx.beginPath(); ctx.arc(0, 0, rs * .55, 0, 6.3); ctx.fill();
+        ctx.fillStyle = BG; ctx.beginPath(); ctx.arc(rs * .25, -rs * .12, rs * .46, 0, 6.3); ctx.fill();
+      } else {
+        ctx.fillStyle = 'rgba(255,255,255,.85)';
+        [[-.3,.1,.26],[0,-.05,.34],[.32,.12,.24]].forEach(function(c){ ctx.beginPath(); ctx.arc(rs * c[0], rs * c[1], rs * c[2], 0, 6.3); ctx.fill(); });
+        ctx.fillRect(-rs * .3, rs * .1, rs * .62, rs * .26);
+      }
+      ctx.restore();
     }
     requestAnimationFrame(frame);
   }
