@@ -113,7 +113,7 @@
     b.addEventListener('click', function(e){ e.stopPropagation(); fn(b); showBar(); });
     bar.appendChild(b);
   }
-  toggle('Suara', function(b){ sound = !sound; b.textContent = sound ? '🔊 Suara' : '🔇 Senyap'; });
+  toggle('Suara', function(b){ sound = !sound; b.textContent = sound ? 'Suara' : 'Senyap'; });
   toggle('Jam', function(b){ clockOn = !clockOn; b.classList.toggle('on', clockOn); });
   toggle('Gaya mata', function(){ var L = ['buddy','robot','cute','box']; STYLE = L[(L.indexOf(STYLE) + 1) % 4]; });
   toggle('Cuaca', function(){ announce(); });
@@ -373,9 +373,9 @@ function clapTick(){
     timers.push(setTimeout(function(){ temp('happy', 2200); }, 1200));
   }
 }
-toggle('👏 Tepuk: mati', function(b){
-  if (CL.on){ CL.on = false; clapStop(); b.textContent = '👏 Tepuk: mati'; b.classList.remove('on'); }
-  else clapStart().then(function(ok){ CL.on = ok; b.textContent = '👏 Tepuk: ' + (ok ? 'nyala' : 'mati'); b.classList.toggle('on', ok); });
+toggle('Tepuk: mati', function(b){
+  if (CL.on){ CL.on = false; clapStop(); b.textContent = 'Tepuk: mati'; b.classList.remove('on'); }
+  else clapStart().then(function(ok){ CL.on = ok; b.textContent = ' Tepuk: ' + (ok ? 'nyala' : 'mati'); b.classList.toggle('on', ok); });
 });
 
 /* ===== ⑦ intip kamera (deteksi gerakan lokal, gambar tidak disimpan/dikirim) ===== */
