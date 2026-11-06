@@ -329,7 +329,84 @@ document.addEventListener('visibilitychange', function(){ if (!document.hidden) 
     var m = Math.abs(a.x || 0) + Math.abs(a.y || 0) + Math.abs(a.z || 0);
     if (m > 40 && tgt !== MOODS.dizzy){ lastTouch = Date.now(); clearTimers(); temp('dizzy', 3000); }
   });
+/* ===== ⑤ ketuk meja (akselerometer) ===== */
+var kPrev = 0, kLast = 0, kQuiet = 0, kHits = [], kTimer = 0, touchAt = 0;
+var K_SENS = 1.0;   // makin kecil = makin peka
+window.addEventListener('pointerdown', function(){ touchAt = Date.now(); }, true);
+window.addEventListener('pointerup', function(){ touchAt = Date.now(); }, true);
+window.addEventListener('devicemotion', function(e){
+  var a = e.accelerationIncludingGravity; if (!a || a.z == null) return;
+  var m = Math.sqrt(a.x*a.x + a.y*a.y + a.z*a.z), d = Math.abs(m - kPrev), now = Date.now(), quiet = kQuiet;
+  kPrev = m; if (d < .25) kQuiet++; else kQuiet = 0;
+  if (quiet < 8 || d < K_SENS || d > 12 || now - kLast < 160 || now - touchAt < 600) return;  // harus diam dulu, bukan dipegang/disentuh
+  kLast = now; kHits = kHits.filter(function(t){ return now - t < 1000; }); kHits.push(now);
+  clearTimeout(kTimer); kTimer = setTimeout(knockDone, 650);
+});
+function knockDone(){
+  var n = kHits.length; kHits = []; lastTouch = Date.now();
+  if (n === 2){ lookT.x = Math.random() < .5 ? -1 : 1; lookT.y = 0; say('Siapa itu?', 'surprised', 1800); timers.push(setTimeout(function(){ lookT.x = 0; }, 1500)); }
+  else if (n >= 3){ say('Hehe, ada tamu!', 'happy', 2500); }
+}
 
+/* ===== ⑥ tepuk tangan (mikrofon: hanya ukur volume, tidak merekam) ===== */
+var CL = {on:false, an:null, buf:null, base:.01, last:0, hits:[], iv:0, stream:null};
+function clapStart(){
+  if (!AC){ say('Ketuk layar dulu ya', 'normal', 2000); return Promise.resolve(false); }
+  if (AC.state === 'suspended') AC.resume();
+  return navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false}}).then(function(s){
+    CL.stream = s; CL.an = AC.createAnalyser(); CL.an.fftSize = 512; CL.buf = new Float32Array(512);
+    AC.createMediaStreamSource(s).connect(CL.an); CL.iv = setInterval(clapTick, 30); return true;
+  }).catch(function(){ say('Mikrofon tidak diizinkan', 'sad', 3000); return false; });
+}
+function clapStop(){ clearInterval(CL.iv); if (CL.stream) CL.stream.getTracks().forEach(function(t){ t.stop(); }); CL.stream = null; CL.an = null; }
+function clapTick(){
+  if (!CL.an) return;
+  CL.an.getFloatTimeDomainData(CL.buf);
+  var s = 0, i; for (i = 0; i < CL.buf.length; i++) s += CL.buf[i] * CL.buf[i];
+  var rms = Math.sqrt(s / CL.buf.length), now = Date.now(), peak = rms > Math.max(.12, CL.base * 5);
+  CL.base += (rms - CL.base) * .02;
+  if (!peak || now - CL.last < 180 || now < talkUntil) return;   // abaikan saat Buddy sedang bicara
+  CL.last = now; CL.hits = CL.hits.filter(function(t){ return now - t < 800; }); CL.hits.push(now);
+  if (CL.hits.length >= 2){
+    CL.hits = []; lastTouch = now;
+    say('Eh, ada yang tepuk tangan!', 'surprised', 1200);
+    timers.push(setTimeout(function(){ temp('happy', 2200); }, 1200));
+  }
+}
+toggle('👏 Tepuk: mati', function(b){
+  if (CL.on){ CL.on = false; clapStop(); b.textContent = '👏 Tepuk: mati'; b.classList.remove('on'); }
+  else clapStart().then(function(ok){ CL.on = ok; b.textContent = '👏 Tepuk: ' + (ok ? 'nyala' : 'mati'); b.classList.toggle('on', ok); });
+});
+
+/* ===== ⑦ intip kamera (deteksi gerakan lokal, gambar tidak disimpan/dikirim) ===== */
+var CAM = {on:false, v:null, c:null, g:null, prev:null, iv:0, stream:null, last:Date.now()};
+function camStart(){
+  return navigator.mediaDevices.getUserMedia({video:{facingMode:'user', width:160, height:120}, audio:false}).then(function(s){
+    CAM.stream = s; CAM.v = document.createElement('video'); CAM.v.muted = true; CAM.v.playsInline = true; CAM.v.srcObject = s; CAM.v.play();
+    CAM.c = document.createElement('canvas'); CAM.c.width = 32; CAM.c.height = 24; CAM.g = CAM.c.getContext('2d', {willReadFrequently:true});
+    CAM.prev = null; CAM.last = Date.now(); CAM.iv = setInterval(camTick, 250); return true;
+  }).catch(function(){ say('Kamera tidak diizinkan', 'sad', 3000); return false; });
+}
+function camStop(){ clearInterval(CAM.iv); if (CAM.stream) CAM.stream.getTracks().forEach(function(t){ t.stop(); }); CAM.stream = null; CAM.prev = null; }
+function camTick(){
+  if (!CAM.v || CAM.v.readyState < 2) return;
+  CAM.g.drawImage(CAM.v, 0, 0, 32, 24);
+  var d = CAM.g.getImageData(0, 0, 32, 24).data, cur = new Uint8Array(768), i, n = 0, sx = 0, sy = 0;
+  for (i = 0; i < 768; i++) cur[i] = (d[i*4] + d[i*4+1] + d[i*4+2]) / 3;
+  if (CAM.prev){ for (i = 0; i < 768; i++){ if (Math.abs(cur[i] - CAM.prev[i]) > 28){ n++; sx += i % 32; sy += (i / 32) | 0; } } }
+  CAM.prev = cur;
+  if (n > 25){                                   // ada gerakan
+    var now = Date.now(), cx = 1 - (sx / n) / 31, cy = (sy / n) / 23;   // x dibalik: kamera depan = cermin
+    lookT.x = (cx - .5) * 2; lookT.y = (cy - .5) * 1.4; lastTouch = now;   // mata mengikuti, dan tidak tidur selama ada orang
+    if (now - CAM.last > 60000){ say('Eh, ada orang!', 'surprised', 1500); timers.push(setTimeout(function(){ temp('happy', 2200); }, 1500)); }
+    CAM.last = now;
+  }
+}
+toggle('👀 Intip: mati', function(b){
+  if (CAM.on){ CAM.on = false; camStop(); b.textContent = '👀 Intip: mati'; b.classList.remove('on'); }
+  else camStart().then(function(ok){ CAM.on = ok; b.textContent = '👀 Intip: ' + (ok ? 'nyala' : 'mati'); b.classList.toggle('on', ok); });
+});
+  
   /* idle life */
   function nextBlink(){ setTimeout(function(){ if (blink < 0) blink = 0; if (Math.random() < .2) setTimeout(function(){ blink = 0; }, 260); nextBlink(); }, 1800 + Math.random()*3800); }
   function nextGlance(){
